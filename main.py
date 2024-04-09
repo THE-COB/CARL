@@ -5,8 +5,13 @@ import tyro
 from pathlib import Path
 
 
-def main(texture_path: str = 'tomatoes.png', texture_dir: str = 'textures', show: bool = False, device: str = 'cpu'):
-	texture = torchvision.io.read_image(texture_dir + '/' + texture_path).permute(1, 2, 0)
+def main(texture_file: str = 'tomatoes.png', 
+		 object_file: str = "cube.obj", 
+		 texture_dir: str = 'textures', 
+		 object_dir: str = "objs", 
+		 show: bool = False, 
+		 device: str = 'cpu'):
+	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0)
 	if show:
 		plt.imshow( texture  )
 		plt.show()
