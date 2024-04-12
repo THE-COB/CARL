@@ -1,0 +1,7 @@
+tyro 
+viser
+trimesh
+numpy
+wget
+torch
+torchvision
