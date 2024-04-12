@@ -5,3 +5,4 @@ numpy
 wget
 torch
 torchvision
+annlite
