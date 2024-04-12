@@ -4,8 +4,7 @@ This project renders volumes from 2D textures using an optimized version of [kop
 
 ## Installation 
 To install relevant packages, run the following:
-```
-bash
+```bash
 pip install -r requirements.txt
 ```
 
