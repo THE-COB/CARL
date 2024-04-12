@@ -45,7 +45,7 @@ def tensorize_mesh(mesh, pitch=0.01):
 		planes[i] = torch.nn.functional.pad(planes[i], (width_pad_left, width_pad_right, length_pad_top, length_pad_bottom))
 	planes = torch.stack(planes).unsqueeze(3)
 	# make planes rgb
-	planes = planes.repeat(1, 1, 1, 3).float()
+	planes = planes.repeat(1, 1, 1, 3)
 	return planes
 
 def sample_texture(texture, im):
@@ -80,8 +80,10 @@ def main(texture_file: str = 'tomatoes.png',
 	print(f"Loaded mesh with {vertices.shape} vertices, {faces.shape} faces, and volume {volume}")
 
 	# voxelize mesh
-	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=0.05) #number of voxels in voxel grid
-	print(f"Voxelized mesh with shape {full_grid.shape}")
+	start = time.time()
+	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=0.01).fill() #number of voxels in voxel grid
+	end = time.time()
+	print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	num_samples = full_grid.points.shape[0]
 	num_pixels = texture.shape[0] * texture.shape[1]
 	p = torch.ones(num_pixels)/num_pixels
@@ -92,11 +94,10 @@ def main(texture_file: str = 'tomatoes.png',
 	sample_voxels2, sample_colors2 = sample_voxels(np.array([-2.0,-0.5,-1.0]), 50, mesh, texture, pitch=0.01)
 	
 	mesh_tensor = tensorize_mesh(mesh, pitch=0.01)
-	# for i in range(mesh_tensor.shape[0]):
-	# 	mesh_tensor[i] = sample_texture(texture, mesh_tensor[i])
-	
-	# convert mesh_tensor to point cloud
-	mesh_pointcloud = mesh_tensor.squeeze(3).reshape(-1, 3).numpy()
+	print(mesh_tensor.shape)
+	mesh_pointcloud = mesh_tensor.nonzero()[:, :3][::3]
+	print(mesh_pointcloud.shape)
+	# print(torch.sum(mesh_pointcloud))
 
 	#for each voxel in the voxel grid:
 		# for each axis (x, y, z)
@@ -110,7 +111,7 @@ def main(texture_file: str = 'tomatoes.png',
 		server = viser.ViserServer()
 		
 		server.add_mesh_simple(
-			name="/mesh",
+			name="/mesh", 
 			vertices=vertices,
 			faces=faces,
 			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
@@ -120,39 +121,39 @@ def main(texture_file: str = 'tomatoes.png',
 		# display voxels in viser and sample colors from texture
 		server.add_point_cloud(
 			name="/full_grid",
-			points=full_grid.points[::2],
+			points=full_grid.points,
 			position=(0.0, 0.0, 0.0),
-			colors=(0, 0, 255),
+			colors=full_colors,
 			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
 			point_size=0.01,
 		)
 
-		server.add_point_cloud(
-			name="/sample_voxels1",
-			points=sample_voxels1.points,
-			position=(-2.0,-1.0,-1.0),
-			colors=sample_colors1,
-			# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=0.01,
-		)
+		# server.add_point_cloud(
+		# 	name="/sample_voxels1",
+		# 	points=sample_voxels1.points,
+		# 	position=(-2.0,-1.0,-1.0),
+		# 	colors=sample_colors1,
+		# 	# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+		# 	point_size=0.01,
+		# )
 
-		server.add_point_cloud(
-			name="/sample_voxels2",
-			points=sample_voxels2.points,
-			position=(-2.0,-0.5,-1.0),
-			colors=sample_colors2,
-			# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=0.01,
-		)
+		# server.add_point_cloud(
+		# 	name="/sample_voxels2",
+		# 	points=sample_voxels2.points,
+		# 	position=(-2.0,-0.5,-1.0),
+		# 	colors=sample_colors2,
+		# 	# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+		# 	point_size=0.01,
+		# )
 
-		server.add_point_cloud(
-			name="/mesh_pointcloud",
-			points=mesh_pointcloud,
-			position=(0.0, 0.0, 0.0),
-			colors=(255, 0, 0),
-			# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=pitch,
-		)
+		# server.add_point_cloud(
+		# 	name="/mesh_pointcloud",
+		# 	points=mesh_pointcloud[::100].numpy(),
+		# 	position=(0.0, 0.0, 0.0),
+		# 	colors=(255, 0, 0),
+		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+		# 	point_size=0.5,
+		# )
 
 		while True:
 			time.sleep(10.0)
