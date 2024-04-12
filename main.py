@@ -81,7 +81,7 @@ def main(texture_file: str = 'tomatoes.png',
 
 	# voxelize mesh
 	start = time.time()
-	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=0.01).fill() #number of voxels in voxel grid
+	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=pitch).fill() #number of voxels in voxel grid
 	end = time.time()
 	print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	num_samples = full_grid.points.shape[0]
@@ -108,20 +108,20 @@ def main(texture_file: str = 'tomatoes.png',
 	
 		server = viser.ViserServer()
 		
-		server.add_mesh_simple(
-			name="/mesh", 
-			vertices=vertices,
-			faces=faces,
-			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			position=(0.0, 0.0, 0.0),
-		)
+		# server.add_mesh_simple(
+		# 	name="/mesh", 
+		# 	vertices=vertices,
+		# 	faces=faces,
+		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+		# 	position=(0.0, 0.0, 0.0),
+		# )
 
 		# display voxels in viser and sample colors from texture
 		server.add_point_cloud(
 			name="/full_grid",
-			points=full_grid.points,
+			points=full_grid.points[::2],
 			position=(0.0, 0.0, 0.0),
-			colors=full_colors,
+			colors=full_colors[::2],
 			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
 			point_size=0.01,
 		)
