@@ -93,15 +93,13 @@ def main(texture_file: str = 'tomatoes.png',
 	sample_voxels1, sample_colors1 = sample_voxels(np.array([-2.0,-1.0,-1.0]), 50, mesh, texture, pitch=0.01)
 	sample_voxels2, sample_colors2 = sample_voxels(np.array([-2.0,-0.5,-1.0]), 50, mesh, texture, pitch=0.01)
 	
-	mesh_tensor = tensorize_mesh(mesh, pitch=0.01)
-	print(mesh_tensor.shape)
-	mesh_pointcloud = mesh_tensor.nonzero()[:, :3][::3]
-	print(mesh_pointcloud.shape)
+
+	# mesh_tensor = tensorize_mesh(mesh, pitch=0.01)
+	# print(mesh_tensor.shape)
+	# mesh_pointcloud = mesh_tensor.nonzero()[:, :3][::3]
+	# print(mesh_pointcloud.shape)
 	# print(torch.sum(mesh_pointcloud))
 
-	#for each voxel in the voxel grid:
-		# for each axis (x, y, z)
-			# for each neighbor
   
 	# display mesh
 	if show:
