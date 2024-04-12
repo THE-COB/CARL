@@ -23,15 +23,15 @@ def main(texture_file: str = 'tomatoes.png',
 		 object_file: str = "cube.obj", 
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
-		 show: bool = False, 
+		 show: bool = True, 
 		 device: str = 'cpu'):
 	
 	# Load and sample texture
 	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0)
 	num_samples = texture.shape[0] * texture.shape[1] 
-	p = torch.ones(num_samples)/num_samples
-	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True)
-	init = texture.view((num_samples, -1))[index].reshape(texture.shape)
+	p = torch.ones(num_samples)/num_samples # Initialize a uniform distribution over samples
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True) #samples from uniform distribution
+	init = texture.view((num_samples, -1))[index].reshape(texture.shape) # gets colors of sampled pixels from texture image + shapes into texture shape
 
 	# load mesh
 	mesh = trimesh.load(object_dir + '/' + object_file)
@@ -40,17 +40,21 @@ def main(texture_file: str = 'tomatoes.png',
 	print(f"Loaded mesh with {vertices.shape} vertices, {faces.shape} faces")
 
 	# voxelize mesh
-	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=0.05)
+	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=0.05) #number of voxels in voxel grid
 	print(f"Voxelized mesh with shape {full_grid.shape}")
 	num_samples = full_grid.points.shape[0]
 	num_pixels = texture.shape[0] * texture.shape[1]
 	p = torch.ones(num_pixels)/num_pixels
 	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True)
-	full_colors = texture.view((num_pixels, -1))[index].reshape(full_grid.points.shape[0], 3)
+	full_colors = texture.view((num_pixels, -1))[index].reshape(full_grid.points.shape[0], 3) #gets colors of the sampled pixels and matches the shape of the mesh
 
 	sample_voxels1, sample_colors1 = sample_voxels(np.array([0,0,0]), 100, mesh, texture, pitch=0.05)
 	sample_voxels2, sample_colors2 = sample_voxels(np.array([-2.0, -1.0, -1.0]), 100, mesh, texture, pitch=0.05)
 
+	#for each voxel in the voxel grid:
+		# for each axis (x, y, z)
+			# for each neighbor
+  
 	# display mesh
 	if show:
 		# plt.imshow( init )
