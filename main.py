@@ -38,8 +38,10 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	"""
 	#find neighborhood of voxel
 	pdb.set_trace()
-	indices_expanded = index[:, None, :].expand(-1, neighborhood_dim, -1)
+	indices_expanded = index[:, None, :].expand(-1, neighborhood_dim, -1) #indices (batch size, neighborhood dim, 3)
 	offsets = torch.arange(-neighborhood_dim // 2, neighborhood_dim // 2).unsqueeze(0).unsqueeze(-1)
+
+
 
 
 def main(texture_file: str = 'tomatoes.png', 
