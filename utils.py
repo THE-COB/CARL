@@ -53,15 +53,13 @@ def sample_texture(texture, im_shape):
 	return init
 
 def grid_show(texels, voxels):
-	import pdb; pdb.set_trace()
 	fig = plt.figure(figsize=(4., 4.))
 	grid = ImageGrid(fig, 111,  # similar to subplot(111)
-									nrows_ncols=(2,texels.shape[0]),  # creates 2x2 grid of axes
+									nrows_ncols=(2,4),  # creates 2x2 grid of axes
 									axes_pad=0.1,  # pad between axes in inch.
 									)
 
-	for ax, im in zip(grid, list(voxels) + list(texels)):
+	for ax, im in zip(grid, list(voxels[:4]) + list(texels[:4])):
 			# Iterating over the grid returns the Axes.
-			ax.imshow(im)
-
+			ax.imshow(im[0])
 	plt.show()
