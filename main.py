@@ -71,9 +71,9 @@ def set_neighborhood(new_neighborhood: torch.Tensor, full_grid_tensor: torch.Ten
 
 	return: torch.Tensor (batch_size, 3, neighborhood_dim, neighborhood_dim, 3)
 	"""
+	neighborhood_dim = new_neighborhood.shape[2]
 	if index.shape[1] == 3:
 		#find neighborhood of voxel
-		neighborhood_dim = new_neighborhood.shape[2]
 		x_start_indices = index[:, 1] - neighborhood_dim // 2
 		x_end_indices = index[:, 1] + neighborhood_dim // 2
 		y_start_indices = index[:, 2] - neighborhood_dim // 2
@@ -84,7 +84,8 @@ def set_neighborhood(new_neighborhood: torch.Tensor, full_grid_tensor: torch.Ten
 		for i in range(index.shape[0]):
 			full_grid_tensor[z_start_indices[i]:z_end_indices[i], x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :] = new_neighborhood[i]
 	else: 
-		neighborhood_dim = new_neighborhood.shape[2]
+		import pdb; pdb.set_trace()
+		
 		x_start_indices = index[:, 0] - neighborhood_dim // 2
 		x_end_indices = index[:, 0] + neighborhood_dim // 2
 		y_start_indices = index[:, 1] - neighborhood_dim // 2
@@ -192,6 +193,7 @@ def main(texture_file: str = 'tomatoes.png',
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	search = Search(texture)
+	optimize = Optimize()
 	if show:
 		plt.imshow(full_grid_tensor[0,:,:,:].numpy())
 		plt.show()
@@ -201,7 +203,7 @@ def main(texture_file: str = 'tomatoes.png',
 		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=8)
 		texel_match = search.find(neighborhood)
 		grid_show(texels=texel_match, voxels=neighborhood)
-		optimize = Optimize()
+		
 		new_neighborhood = optimize(exemplar=texel_match, solid=neighborhood)
 		full_grid_tensor = set_neighborhood(new_neighborhood, full_grid_tensor, index)
 		if show:

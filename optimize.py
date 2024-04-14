@@ -28,30 +28,28 @@ class Optimize:
         solid:    torch.Tensor (n, 3, 8, 8, 3)
         exemplar: torch.Tensor (n, 3, 8, 8, 3)
 
-        return:   torch.Tensor (n, 3, 3)
+        return:   torch.Tensor (n, 3)
         """
+        
         #subtract solid - exemplar
         diff = solid - exemplar
 
         #find norm of this value
-        n = torch.norm(diff, dim=(2,3)) # [n, 3, 3]
+        n = torch.norm(diff.flatten(2), dim=2) # [n, num_axes]
 
         #raise to power of r - 2
-        return torch.pow(n, (self.r - 2)) # [n, 3, 3]
+        return torch.pow(n, (self.r - 2)) # [n, num_axes]
     
     def closed_form_irls(self, w: torch.Tensor, e: torch.Tensor):
         """
-        w: torch.Tensor (n, 3, 3)
+        w: torch.Tensor (n, 3)
         e: torch.Tensor (n, 3, 8, 8, 3)
 
         returns s: torch.Tensor (n, 3, 8, 8, 3)
         """
 
-        w_new = w.unsqueeze(-2).unsqueeze(-3)
-        w_broadcasted = w_new.expand(-1, -1, 8, 8, -1)
+        s_new = torch.sum(w.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * e, dim=(2,3), keepdim=True)\
+            /torch.sum(w)
 
-        s_new = torch.sum(torch.sum(w_broadcasted * e, dim=(2,3), keepdim=True), dim=1, keepdim=True) \
-              / torch.sum(torch.sum(w_broadcasted, dim=(2,3), keepdim=True), dim=1, keepdim=True)
-        
         return s_new
 
