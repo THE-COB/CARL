@@ -36,11 +36,31 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 
 	return: torch.Tensor (batch_size, 3, neighborhood_dim, neighborhood_dim, 3)
 	"""
+	assert(neighborhood_dim % 2 == 0)
 	#find neighborhood of voxel
-	pdb.set_trace()
-	indices_expanded = index[:, None, :].expand(-1, neighborhood_dim, -1)
-	offsets = torch.arange(-neighborhood_dim // 2, neighborhood_dim // 2).unsqueeze(0).unsqueeze(-1)
 
+	z_indices = index[:, 0]
+	x_indices = index[:, 1]
+	y_indices = index[:, 2]
+	x_start_indices = index[:, 1] - neighborhood_dim // 2
+	x_end_indices = index[:, 1] + neighborhood_dim // 2
+	y_start_indices = index[:, 2] - neighborhood_dim // 2
+	y_end_indices = index[:, 2] + neighborhood_dim // 2
+	z_start_indices = index[:, 0] - neighborhood_dim // 2
+	z_end_indices = index[:, 0] + neighborhood_dim // 2
+	
+	pdb.set_trace()
+	xy_grid = full_grid_tensor[index[:, 0], x_start_indices:x_end_indices, y_start_indices:y_end_indices, :]
+	xz_grid = full_grid_tensor[z_start_indices:z_end_indices, index[:, 1], y_start_indices:y_end_indices, :]
+	yz_grid = full_grid_tensor[z_start_indices:z_end_indices, x_start_indices:x_end_indices, index[:, 2], :]
+
+	neighborhood = np.zeros((index.shape[0], 3, neighborhood_dim, neighborhood_dim, 3))
+	neighborhood[:,0,:,:,:] = xy_grid
+	neighborhood[:,1,:,:,:] = xz_grid
+	neighborhood[:,2,:,:,:] = yz_grid
+	plt.imshow(neighborhood[0,0,:,:,:])
+	plt.show()
+	return neighborhood
 
 def main(texture_file: str = 'tomatoes.png', 
 		 object_file: str = "cube.obj", 
