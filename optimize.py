@@ -52,6 +52,6 @@ class Optimize:
 
         s_new = torch.sum(torch.sum(w_broadcasted * e, dim=(2,3), keepdim=True), dim=1, keepdim=True) \
               / torch.sum(torch.sum(w_broadcasted, dim=(2,3), keepdim=True), dim=1, keepdim=True)
-
+        
         return s_new
 

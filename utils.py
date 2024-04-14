@@ -44,8 +44,8 @@ def tensorize_mesh(mesh, pitch=0.01):
 	return planes
 
 def sample_texture(texture, im_shape):
-	im_shape = (5 - len(im_shape)) * (1,) + im_shape
-	num_samples = im_shape[2] * im_shape[3] 
+	im_shape = (4 - len(im_shape)) * (1,) + im_shape
+	num_samples = im_shape[1] * im_shape[2] 
 	num_pixels = texture.shape[0] * texture.shape[1]
 	p = torch.ones(num_pixels)/num_pixels # Initialize a uniform distribution over samples
 	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True) #samples from uniform distribution
@@ -53,6 +53,7 @@ def sample_texture(texture, im_shape):
 	return init
 
 def grid_show(texels, voxels):
+	import pdb; pdb.set_trace()
 	fig = plt.figure(figsize=(4., 4.))
 	grid = ImageGrid(fig, 111,  # similar to subplot(111)
 									nrows_ncols=(2,texels.shape[0]),  # creates 2x2 grid of axes

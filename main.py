@@ -39,7 +39,6 @@ def sample_voxel_2d(full_grid_mask: torch.Tensor, batch_size: int = 16, neighbor
 	return: torch.Tensor (batch_size, 3)
 	"""
 	#select random voxel (16 times)
-	import pdb;pdb.set_trace()
 	_, h, w = full_grid_mask.shape
 	padding = neighborhood_dim//2
 	h_index = torch.randint(padding, h-padding, size=(batch_size,1))
@@ -54,7 +53,7 @@ def sample_voxel_3d(full_grid_mask: torch.Tensor, batch_size: int = 16, neighbor
 
 	return: torch.Tensor (batch_size, 3)
 	"""
-	#select random voxel (16 times)
+	#select random voxel 
 	d, h, w = full_grid_mask.shape
 	padding = neighborhood_dim//2
 	d_index = torch.randint(padding, d-padding, size=(batch_size,1))
@@ -72,17 +71,27 @@ def set_neighborhood(new_neighborhood: torch.Tensor, full_grid_tensor: torch.Ten
 
 	return: torch.Tensor (batch_size, 3, neighborhood_dim, neighborhood_dim, 3)
 	"""
-	#find neighborhood of voxel
-	neighborhood_dim = new_neighborhood.shape[2]
-	x_start_indices = index[:, 1] - neighborhood_dim // 2
-	x_end_indices = index[:, 1] + neighborhood_dim // 2
-	y_start_indices = index[:, 2] - neighborhood_dim // 2
-	y_end_indices = index[:, 2] + neighborhood_dim // 2
-	z_start_indices = index[:, 0] - neighborhood_dim // 2
-	z_end_indices = index[:, 0] + neighborhood_dim // 2
-	
-	for i in range(index.shape[0]):
-		full_grid_tensor[z_start_indices[i]:z_end_indices[i], x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :] = new_neighborhood[i]
+	if index.shape[1] == 3:
+		#find neighborhood of voxel
+		neighborhood_dim = new_neighborhood.shape[2]
+		x_start_indices = index[:, 1] - neighborhood_dim // 2
+		x_end_indices = index[:, 1] + neighborhood_dim // 2
+		y_start_indices = index[:, 2] - neighborhood_dim // 2
+		y_end_indices = index[:, 2] + neighborhood_dim // 2
+		z_start_indices = index[:, 0] - neighborhood_dim // 2
+		z_end_indices = index[:, 0] + neighborhood_dim // 2
+		
+		for i in range(index.shape[0]):
+			full_grid_tensor[z_start_indices[i]:z_end_indices[i], x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :] = new_neighborhood[i]
+	else: 
+		neighborhood_dim = new_neighborhood.shape[2]
+		x_start_indices = index[:, 0] - neighborhood_dim // 2
+		x_end_indices = index[:, 0] + neighborhood_dim // 2
+		y_start_indices = index[:, 1] - neighborhood_dim // 2
+		y_end_indices = index[:, 1] + neighborhood_dim // 2
+		
+		for i in range(index.shape[0]):
+			full_grid_tensor[0, x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :] = new_neighborhood[i]
 	
 	return full_grid_tensor
 
@@ -153,7 +162,7 @@ def main(texture_file: str = 'tomatoes.png',
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
 		 pitch: float = 0.1,
-		 num_iters: int = 100,
+		 num_iters: int = 2,
 		 show: bool = True, 
 		 test_2d: bool = False,
 		 device: str = 'cpu'):
@@ -180,18 +189,18 @@ def main(texture_file: str = 'tomatoes.png',
 		mask = full_grid.matrix
 	else:
 		full_grid_tensor = sample_texture(texture, (1, 32, 32, 3))
-		mask = torch.ones_like(full_grid_tensor[:, :, :, :, 0]).bool()
+		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
-
-	for _ in range(num_iters):
-		if show:
-			plt.imshow(full_grid_tensor[0, 0,:,:,:].numpy())
-			plt.show()
+	search = Search(texture)
+	if show:
+		plt.imshow(full_grid_tensor[0,:,:,:].numpy())
+		plt.show()
+	
+	for i in range(num_iters):
 		index = sample_voxel(mask)
 		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=8)
-		search = Search(texture)
 		texel_match = search.find(neighborhood)
-		# grid_show(texels=texel_match, voxels=neighborhood)
+		grid_show(texels=texel_match, voxels=neighborhood)
 		optimize = Optimize()
 		new_neighborhood = optimize(exemplar=texel_match, solid=neighborhood)
 		full_grid_tensor = set_neighborhood(new_neighborhood, full_grid_tensor, index)
@@ -204,7 +213,7 @@ def main(texture_file: str = 'tomatoes.png',
 
 
 	# display mesh
-	if show:
+	if False and show:
 		# plt.imshow( init )
 		# plt.show()
 	
