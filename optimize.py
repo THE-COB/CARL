@@ -1,4 +1,5 @@
 import torch
+import einops 
 
 class Optimize:
     def __init__(self, r=0.8):
@@ -9,16 +10,11 @@ class Optimize:
         solid:    torch.Tensor (n, 3, 8, 8, 3)
         exemplar: torch.Tensor (n, 3, 8, 8, 3)
 
-        return:   torch.Tensor (n, 3, 8, 8, 3)
+        return:   torch.Tensor (n, 3)
         """
         
-        for i in range (max_iter):
-            w = self.find_weight(exemplar, solid)
-            s = self.closed_form_irls(w, exemplar)
-            if torch.norm(s - solid) < tol:
-                solid = s
-                break
-            solid = s
+        w = self.find_weight(exemplar, solid)
+        s = self.closed_form_irls(w, exemplar)
         
         return s
         
@@ -45,10 +41,9 @@ class Optimize:
         w: torch.Tensor (n, 3)
         e: torch.Tensor (n, 3, 8, 8, 3)
 
-        returns s: torch.Tensor (n, 3, 8, 8, 3)
+        returns s: torch.Tensor (n, 3)
         """
-
-        s_new = torch.sum(w.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * e, dim=(2,3), keepdim=True)\
+        s_new = torch.sum(einops.rearrange(w.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * e, 'b p w h c -> b (p w h) c'),dim=1)\
             /torch.sum(w)
 
         return s_new
