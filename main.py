@@ -8,26 +8,45 @@ import trimesh
 import viser.transforms as tf
 import numpy as np
 import time
-import pdb
+
+from tqdm import tqdm
+from search import Search
+from optimize import Optimize
+from utils import sample_texture, grid_show
+
+def randomize_voxels(full_grid, texture):
+	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float()
+	
+	num_samples = full_grid_tensor.shape[0] * full_grid_tensor.shape[1] * full_grid_tensor.shape[2]
+	num_pixels = texture.shape[0] * texture.shape[1]
+	p = torch.ones(num_pixels)/num_pixels
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True)
+	sample_colors = texture.view((num_pixels, -1))[index].reshape(full_grid_tensor.shape[0], full_grid_tensor.shape[1], full_grid_tensor.shape[2], 3)
+	full_grid_tensor = full_grid_tensor * sample_colors
+	return full_grid_tensor
 
 
-def sample_voxel(full_grid: torch.Tensor, batch_size: int = 16) -> torch.Tensor:
+def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhood_dim: int=8) -> torch.Tensor:
 	"""
-	full_grid:  torch.Tensor (z, x, y, 3)
+	full_grid:  torch.Tensor (d, h, w)
 	batch size: number of voxels sampling for neighborhoods
 
 	return: torch.Tensor (batch_size, 3)
 	"""
-	#select random voxel (16 times)
-	p = torch.ones(full_grid.shape[0] * full_grid.shape[1] * full_grid.shape[2])/(full_grid.shape[0] * full_grid.shape[1] * full_grid.shape[2])
-	index = torch.multinomial(input=p, num_samples=batch_size, replacement=True)
-	index = torch.stack([index // (full_grid.shape[1] * full_grid.shape[2]), \
-					 	(index % (full_grid.shape[1] * full_grid.shape[2])) // full_grid.shape[2], \
-						(index % (full_grid.shape[1] * full_grid.shape[2])) % full_grid.shape[2]], dim=1)
-	return index
+	#select random voxel 
+	d, h, w = full_grid_mask.shape
+	padding = neighborhood_dim//2
+	
+	h_index = torch.randint(padding, h-padding, size=(batch_size,1))
+	w_index = torch.randint(padding, w-padding, size=(batch_size,1))
+	if d == 1:
+		d_index = torch.zeros_like(h_index)
+	else:
+		d_index = torch.randint(padding, d-padding, size=(batch_size,1))
+	index = torch.hstack([d_index, h_index, w_index])
+	return index[full_grid_mask[index.T[0],index.T[1],index.T[2]]]
 
-
-
+	
 def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, neighborhood_dim: int = 8) -> torch.Tensor:
 	"""
 	full_grid_tensor:  torch.Tensor (z, x, y, 3)
@@ -39,9 +58,6 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	assert(neighborhood_dim % 2 == 0)
 	#find neighborhood of voxel
 
-	z_indices = index[:, 0]
-	x_indices = index[:, 1]
-	y_indices = index[:, 2]
 	x_start_indices = index[:, 1] - neighborhood_dim // 2
 	x_end_indices = index[:, 1] + neighborhood_dim // 2
 	y_start_indices = index[:, 2] - neighborhood_dim // 2
@@ -49,60 +65,83 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	z_start_indices = index[:, 0] - neighborhood_dim // 2
 	z_end_indices = index[:, 0] + neighborhood_dim // 2
 	
-	pdb.set_trace()
-	xy_grid = full_grid_tensor[index[:, 0], x_start_indices:x_end_indices, y_start_indices:y_end_indices, :]
-	xz_grid = full_grid_tensor[z_start_indices:z_end_indices, index[:, 1], y_start_indices:y_end_indices, :]
-	yz_grid = full_grid_tensor[z_start_indices:z_end_indices, x_start_indices:x_end_indices, index[:, 2], :]
-
-	neighborhood = np.zeros((index.shape[0], 3, neighborhood_dim, neighborhood_dim, 3))
-	neighborhood[:,0,:,:,:] = xy_grid
-	neighborhood[:,1,:,:,:] = xz_grid
-	neighborhood[:,2,:,:,:] = yz_grid
-	plt.imshow(neighborhood[0,0,:,:,:])
-	plt.show()
+	neighborhood = []
+	for i in range(index.shape[0]):
+		
+		xy_grid = full_grid_tensor[index[:, 0][0], x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :].unsqueeze(0)
+		if full_grid_tensor.shape[0] > 1:
+			xz_grid = full_grid_tensor[z_start_indices[i]:z_end_indices[i], index[:, 1][0], y_start_indices[i]:y_end_indices[i], :].unsqueeze(0)
+			yz_grid = full_grid_tensor[z_start_indices[i]:z_end_indices[i], x_start_indices[i]:x_end_indices[i], index[:, 2][0], :].unsqueeze(0)
+			neighborhood.append(torch.vstack([xy_grid, xz_grid, yz_grid]).unsqueeze(0))
+		else:
+			neighborhood.append(xy_grid.unsqueeze(0))
+	neighborhood = torch.vstack(neighborhood)
+	
 	return neighborhood
 
+
+
 def main(texture_file: str = 'tomatoes.png', 
-		 object_file: str = "cube.obj", 
+		 object_file: str = 'cow.obj', 
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
-		 pitch: float = 0.01,
+		 pitch: float = 0.1,
+		 num_iters: int = 2,
 		 show: bool = True, 
+		 batch_size: int = 32, 
+		 show_3d: bool = True,
+		 test_2d: bool = False,
 		 device: str = 'cpu'):
 	
 	# Load and sample texture
 	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float()/255.0
-	num_samples = texture.shape[0] * texture.shape[1] 
-	p = torch.ones(num_samples)/num_samples # Initialize a uniform distribution over samples
-	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True) #samples from uniform distribution
-	init = texture.view((num_samples, -1))[index].reshape(texture.shape) # gets colors of sampled pixels from texture image + shapes into texture shape
-
-	# load mesh
-	mesh = trimesh.load(object_dir + '/' + object_file)
-	vertices = mesh.vertices
-	faces = mesh.faces
-	volume = mesh.volume
-	corners = mesh.bounds
-	print(f"Loaded mesh with {vertices.shape} vertices, {faces.shape} faces, and volume {volume}")
-
-	# voxelize mesh
-	start = time.time()
-	full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=pitch).fill() #number of voxels in voxel grid (depth, length, width)
-	end = time.time()
-	print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
-	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float()
 	
-	num_samples = full_grid_tensor.shape[0] * full_grid_tensor.shape[1] * full_grid_tensor.shape[2]
-	num_pixels = texture.shape[0] * texture.shape[1]
-	p = torch.ones(num_pixels)/num_pixels
-	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True)
-	sample_colors = texture.view((num_pixels, -1))[index].reshape(full_grid_tensor.shape[0], full_grid_tensor.shape[1], full_grid_tensor.shape[2], 3)
-	full_grid_tensor = full_grid_tensor * sample_colors
+	if not test_2d:
+		# load mesh
+		mesh = trimesh.load(object_dir + '/' + object_file)
+		vertices = mesh.vertices
+		faces = mesh.faces
+		volume = mesh.volume
+		corners = mesh.bounds
+		print(f"Loaded mesh with {vertices.shape} vertices, {faces.shape} faces, and volume {volume}")
+
+		# voxelize mesh
+		start = time.time()
+		full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=pitch).fill() #number of voxels in voxel grid (depth, length, width)
+		end = time.time()
+		print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	
-	sample_neighborhood(full_grid_tensor, sample_voxel(full_grid_tensor), neighborhood_dim=8)
+		full_grid_tensor = randomize_voxels(full_grid, texture)
+		mask = full_grid.matrix
+	else:
+		full_grid_tensor = sample_texture(texture, (1, 32, 32, 3))
+		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
+	
+	search = Search(texture)
+	optimize = Optimize()
+	if show:
+		plt.imshow(full_grid_tensor[0,:,:,:].numpy())
+		plt.show()
+	
+	for i in tqdm(range(num_iters)):
+		index = sample_voxel(mask, batch_size=batch_size)
+		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=8)
+		texel_match = search.find(neighborhood)
+		
+		new_value = optimize(exemplar=texel_match, solid=neighborhood)
+		full_grid_tensor[index.T[0], index.T[1], index.T[2]] = new_value
+
+		if show and i%10 == 0:
+			grid_show(texels=texel_match, voxels=neighborhood)
+			plt.imshow(full_grid_tensor[0,:,:,:].numpy())
+			plt.show()
+	
+
+
+
 
 	# display mesh
-	if show:
+	if not test_2d and show_3d:
 		# plt.imshow( init )
 		# plt.show()
 	

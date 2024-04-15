@@ -3,6 +3,8 @@ import torchvision
 import numpy as np
 import trimesh
 from torchvision.transforms.functional import pil_to_tensor
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 def sample_voxels(sample_point, radius, mesh, texture, pitch=0.01):
 	# Sample voxel mesh
@@ -41,10 +43,23 @@ def tensorize_mesh(mesh, pitch=0.01):
 	planes = planes.repeat(1, 1, 1, 3)
 	return planes
 
-def sample_texture(texture, im):
-	num_samples = im.shape[0] * im.shape[1]
+def sample_texture(texture, im_shape):
+	im_shape = (4 - len(im_shape)) * (1,) + im_shape
+	num_samples = im_shape[1] * im_shape[2] 
 	num_pixels = texture.shape[0] * texture.shape[1]
-	p = torch.ones(num_pixels)/num_pixels
-	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True)
-	init = texture.view((num_samples, -1))[index].reshape(im.shape)
+	p = torch.ones(num_pixels)/num_pixels # Initialize a uniform distribution over samples
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True) #samples from uniform distribution
+	init = texture.view((-1, 3))[index].reshape(im_shape) # gets colors of sampled pixels from texture image + shapes into texture shape
 	return init
+
+def grid_show(texels, voxels):
+	fig = plt.figure(figsize=(4., 4.))
+	grid = ImageGrid(fig, 111,  # similar to subplot(111)
+									nrows_ncols=(2,4),  # creates 2x2 grid of axes
+									axes_pad=0.1,  # pad between axes in inch.
+									)
+
+	for ax, im in zip(grid, list(voxels[:4]) + list(texels[:4])):
+			# Iterating over the grid returns the Axes.
+			ax.imshow(im[0])
+	plt.show()

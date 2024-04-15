@@ -6,3 +6,4 @@ wget
 torch
 torchvision
 annlite
+tqdm
