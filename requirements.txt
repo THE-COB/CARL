@@ -6,4 +6,5 @@ wget
 torch
 torchvision
 annlite
-einops
+tqdm
+einops 
