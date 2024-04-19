@@ -100,6 +100,7 @@ def main(texture_file: str = 'tomatoes.png',
 		 test_2d: bool = False,
 		 neighborhood_dim: int = 8,
 		 r: float = 0.8,
+		 use_hist: bool = True,
 		 device: str = 'cpu'):
 	
 	# Load and sample texture
@@ -127,7 +128,7 @@ def main(texture_file: str = 'tomatoes.png',
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	search = Search(texture, neighborhood_dim=neighborhood_dim)
-	optimize = Optimize(r=r)
+	optimize = Optimize(texture=texture, r=r, use_hist=use_hist)
 	
 	tensor_show(full_grid_tensor, show=True)
 

@@ -2,14 +2,17 @@ import torch
 import einops 
 
 class Optimize:
-    def __init__(self, texture, r=0.8, num_bins=16):
+    def __init__(self, texture, r=0.8, num_bins=16,use_hist=True):
         self.r = r
         self.texture = texture
-        self.texture_hists = torch.stack([self.create_texture_hist(texture, 0), self.create_texture_hist(texture, 1), self.create_texture_hist(texture, 2)], dim=0)
-        self.num_bins = num_bins
-        self.solid_hists = torch.stack
+        self.use_hist = use_hist
+        if use_hist:
+            self.num_bins = num_bins
+            self.texture_hists = self.create_hist(texture)
 
-    def __call__(self, exemplar: torch.Tensor, solid: torch.Tensor, tol=0.001, max_iter=1000) -> torch.Tensor:
+
+
+    def __call__(self, exemplar: torch.Tensor, solid: torch.Tensor ) -> torch.Tensor:
         """
         solid:    torch.Tensor (n, 3, 8, 8, 3)
         exemplar: torch.Tensor (n, 3, 8, 8, 3)
@@ -20,6 +23,8 @@ class Optimize:
         solid = solid.clone() * 255.0
         # print(torch.max(exemplar), torch.max(solid))
         w = self.find_weight(exemplar, solid)
+        if self.use_hist:
+            w = self.update_weight(w, solid, exemplar)
         s = self.closed_form_irls(w, exemplar)
         
         # print(f"s min and max, {torch.min(s/255)}, {torch.max(s/255)}")
@@ -48,21 +53,28 @@ class Optimize:
 
     def update_weight(self, weight: torch.Tensor, solid: torch.Tensor, exemplar: torch.Tensor) -> torch.Tensor:
         """
-        weight:   torch.Tensor (n, 3)
+        weight:   torch.Tensor (n, 3, 8, 8, 3)
         solid:    torch.Tensor (n, 3, 8, 8, 3)
         exemplar: torch.Tensor (n, 3, 8, 8, 3)
 
-        return:   torch.Tensor (n, 3)
+        return:   torch.Tensor (n, 3, 8, 8, 3)
         """
-    # get bin number
-        bin_width = 1/self.num_bins
-        bin_indices = weight//bin_width #(n, 3)
-        n, c = bin_indices.shape
-        hist_values = self.texture_hists[[0, 1, 2]*n, bin_indices.flatten()].shape(bin_indices.shape) #(n,3)
+        # get bin number
+        # solid_indices = solid//256 * self.num_bins
+        exemplar_indices = (exemplar / 256 * self.num_bins).int()
+        n, p, h, w, c = weight.shape
+        solid_hists = self.create_hist(solid)
+        try:
+            hist_solid_values = solid_hists[[0, 1, 2]*n*h*w*p, exemplar_indices.flatten()].reshape(exemplar_indices.shape) 
+        except:
+            import pdb; pdb.set_trace()
+        hist_exemplar_values = self.texture_hists[[0, 1,2]*n*h*w*p, exemplar_indices.flatten()].reshape(exemplar_indices.shape)
+        diff = hist_solid_values - hist_exemplar_values
+        hist_weights = weight / (1 + torch.sum(torch.where(diff > 0, diff, 0.0), dim=4, keepdim=True))
+        return hist_weights
         
 
     
-        
 
     
     def closed_form_irls(self, w: torch.Tensor, e: torch.Tensor):
@@ -77,20 +89,22 @@ class Optimize:
 
         return s_new
     
-    def create_texture_hist(self, texture: torch.Tensor, channel: int, num_bins: int) -> torch.Tensor:
+    def create_hist(self, patch: torch.Tensor) -> torch.Tensor:
         """
-        texture: torch.Tensor (h, w, 3)
+        patch: torch.Tensor (h, w, 3)
         channel: int [0, 1, 2] - represents the color chosen
         num_bins: int - default 16
 
         returns h: torch.Tensor (# bins)
         """
-        texels = texture[..., channel].view(-1)
-        h = torch.histogram(texels.float(), bins=num_bins, min=0, max=255)
 
-        return h
-    
-    def create_solid_hist(self, solid: torch.Tensor, channel: int, num_bins: int) -> torch.Tensor:
-        
-
+        # texels = texture[..., channel].view(-1)
+        # h = torch.histogram(texels.float(), bins=num_bins, min=0, max=255)
+        num_channels = patch.shape[-1]
+        return torch.stack([torch.histogram(
+                                patch[..., channel].view(-1).float(), 
+                                bins=self.num_bins, 
+                                range=(0, 255),
+                                density=True
+                            )[0] for channel in range(num_channels)], dim=0)
 
