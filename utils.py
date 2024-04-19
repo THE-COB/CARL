@@ -52,14 +52,31 @@ def sample_texture(texture, im_shape):
 	init = texture.view((-1, 3))[index].reshape(im_shape) # gets colors of sampled pixels from texture image + shapes into texture shape
 	return init
 
-def grid_show(texels, voxels):
-	fig = plt.figure(figsize=(4., 4.))
-	grid = ImageGrid(fig, 111,  # similar to subplot(111)
-									nrows_ncols=(2,4),  # creates 2x2 grid of axes
-									axes_pad=0.1,  # pad between axes in inch.
-									)
+def grid_show(texels, voxels, show):
+	if show:
+		fig = plt.figure(figsize=(4., 4.))
+		grid = ImageGrid(fig, 111,  # similar to subplot(111)
+										nrows_ncols=(2,4),  # creates 2x2 grid of axes
+										axes_pad=0.1,  # pad between axes in inch.
+										)
 
-	for ax, im in zip(grid, list(voxels[:4]) + list(texels[:4])):
-			# Iterating over the grid returns the Axes.
-			ax.imshow(im[0])
-	plt.show()
+		for ax, im in zip(grid, list(voxels[:4]) + list(texels[:4])):
+				# Iterating over the grid returns the Axes.
+				ax.imshow(im[0])
+		plt.show()
+
+def tensor_show(tensor, show):
+	if show:
+		slice = torch.randint(tensor.shape[0], (1,))[0]
+		plt.imshow(tensor[slice].numpy())
+		plt.show()
+
+def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
+	"""
+	full_grid_tensor:  torch.Tensor (d, h, w, 3)
+	mask:  torch.Tensor (d, h, w)
+
+	return: points: colors
+	"""
+	colors = full_grid_tensor[mask].view(-1, 3)
+	return colors

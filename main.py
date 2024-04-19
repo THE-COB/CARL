@@ -12,7 +12,7 @@ import time
 from tqdm import tqdm
 from search import Search
 from optimize import Optimize
-from utils import sample_texture, grid_show
+from utils import sample_texture, grid_show, tensor_show, pointify_tensor
 
 def randomize_voxels(full_grid, texture):
 	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float()
@@ -44,7 +44,11 @@ def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhoo
 	else:
 		d_index = torch.randint(padding, d-padding, size=(batch_size,1))
 	index = torch.hstack([d_index, h_index, w_index])
-	return index[full_grid_mask[index.T[0],index.T[1],index.T[2]]]
+	true_index = index[full_grid_mask[index.T[0],index.T[1],index.T[2]]]
+	if len(true_index)== 0: 
+		return sample_voxel(full_grid_mask, batch_size,neighborhood_dim)
+	else:
+		return true_index
 
 	
 def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, neighborhood_dim: int = 8) -> torch.Tensor:
@@ -75,14 +79,17 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 			neighborhood.append(torch.vstack([xy_grid, xz_grid, yz_grid]).unsqueeze(0))
 		else:
 			neighborhood.append(xy_grid.unsqueeze(0))
-	neighborhood = torch.vstack(neighborhood)
+	try:
+		neighborhood = torch.vstack(neighborhood)
+	except:
+		import pdb; pdb.set_trace()
 	
 	return neighborhood
 
 
 
 def main(texture_file: str = 'tomatoes.png', 
-		 object_file: str = 'cow.obj', 
+		 object_file: str = 'cow.obj',
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
 		 pitch: float = 0.1,
@@ -91,10 +98,12 @@ def main(texture_file: str = 'tomatoes.png',
 		 batch_size: int = 32, 
 		 show_3d: bool = True,
 		 test_2d: bool = False,
+		 neighborhood_dim: int = 8,
+		 r: float = 0.8,
 		 device: str = 'cpu'):
 	
 	# Load and sample texture
-	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float()/255.0
+	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float() / 255.0
 	
 	if not test_2d:
 		# load mesh
@@ -114,31 +123,26 @@ def main(texture_file: str = 'tomatoes.png',
 		full_grid_tensor = randomize_voxels(full_grid, texture)
 		mask = full_grid.matrix
 	else:
-		full_grid_tensor = sample_texture(texture, (1, 32, 32, 3))
+		full_grid_tensor = sample_texture(texture, (1, neighborhood_dim**2, neighborhood_dim**2, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
-	search = Search(texture)
-	optimize = Optimize()
-	if show:
-		plt.imshow(full_grid_tensor[0,:,:,:].numpy())
-		plt.show()
+	search = Search(texture, neighborhood_dim=neighborhood_dim)
+	optimize = Optimize(r=r)
 	
+	tensor_show(full_grid_tensor, show=True)
+
 	for i in tqdm(range(num_iters)):
-		index = sample_voxel(mask, batch_size=batch_size)
-		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=8)
+		index = sample_voxel(mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
+		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=neighborhood_dim)
 		texel_match = search.find(neighborhood)
 		
 		new_value = optimize(exemplar=texel_match, solid=neighborhood)
 		full_grid_tensor[index.T[0], index.T[1], index.T[2]] = new_value
 
-		if show and i%10 == 0:
-			grid_show(texels=texel_match, voxels=neighborhood)
-			plt.imshow(full_grid_tensor[0,:,:,:].numpy())
-			plt.show()
-	
+		grid_show(texels=texel_match, voxels=neighborhood, show=i%(num_iters//4) == 0 and show)
+		tensor_show(full_grid_tensor, show=i%(num_iters//4) == 0 and show)	
 
-
-
+	colors = pointify_tensor(full_grid_tensor, mask=mask)
 
 	# display mesh
 	if not test_2d and show_3d:
@@ -165,14 +169,14 @@ def main(texture_file: str = 'tomatoes.png',
 			point_size=0.01,
 		)
 
-		# server.add_point_cloud(
-		# 	name="/sample_voxels1",
-		# 	points=sample_voxels1.points,
-		# 	position=(-2.0,-1.0,-1.0),
-		# 	colors=sample_colors1,
-		# 	# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.01,
-		# )
+		server.add_point_cloud(
+			name="/texture_voxels",
+			points=full_grid.points,
+			position=(0.0, 0.0, 0.0),
+			colors=colors,
+			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+			point_size=0.1,
+		)
 
 		# server.add_point_cloud(
 		# 	name="/sample_voxels2",
