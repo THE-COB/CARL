@@ -12,11 +12,14 @@ class Optimize:
 
         return:   torch.Tensor (n, 3)
         """
-        
+        exemplar = exemplar.clone() * 255.0
+        solid = solid.clone() * 255.0
+        # print(torch.max(exemplar), torch.max(solid))
         w = self.find_weight(exemplar, solid)
         s = self.closed_form_irls(w, exemplar)
         
-        return s
+        # print(f"s min and max, {torch.min(s/255)}, {torch.max(s/255)}")
+        return s / 255.0
         
 
     def find_weight(self, exemplar: torch.Tensor, solid: torch.Tensor) -> torch.Tensor:
@@ -24,27 +27,29 @@ class Optimize:
         solid:    torch.Tensor (n, 3, 8, 8, 3)
         exemplar: torch.Tensor (n, 3, 8, 8, 3)
 
-        return:   torch.Tensor (n, 3)
+        return:   torch.Tensor (n, 3, 8, 8, 3)
         """
         
         #subtract solid - exemplar
         diff = solid - exemplar
-
+        
         #find norm of this value
-        n = torch.norm(diff.flatten(2), dim=2) # [n, num_axes]
+        b, p, h, w, c = solid.shape 
+        
+        n = torch.norm(einops.rearrange(diff, 'b p h w c -> b p (h w) c'), dim=2) # [n, num_axes, channel]
+        n = einops.rearrange(torch.repeat_interleave(n.unsqueeze(2), h*w, dim=2), 'b p (h w) c -> b p h w c', h=h, w=w)
 
-        #raise to power of r - 2
-        return torch.pow(n, (self.r - 2)) # [n, num_axes]
+        return torch.pow(n, (self.r - 2)) # [n, num_axes, 1, 1, channel]
     
     def closed_form_irls(self, w: torch.Tensor, e: torch.Tensor):
         """
-        w: torch.Tensor (n, 3)
+        w: torch.Tensor (n, 3, 8, 8, 3)
         e: torch.Tensor (n, 3, 8, 8, 3)
 
         returns s: torch.Tensor (n, 3)
         """
-        s_new = torch.sum(einops.rearrange(w.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * e, 'b p w h c -> b (p w h) c'),dim=1)\
-            /torch.sum(w)
+
+        s_new = 1/torch.sum(w, dim=(1,2,3)) * torch.sum(einops.rearrange(w * e, 'b p w h c -> b (p w h) c'),dim=1)
 
         return s_new
 
