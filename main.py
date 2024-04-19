@@ -114,9 +114,14 @@ def main(texture_file: str = 'tomatoes.png',
 		full_grid_tensor = randomize_voxels(full_grid, texture)
 		mask = full_grid.matrix
 	else:
+		import pdb; pdb.set_trace()
 		full_grid_tensor = sample_texture(texture, (1, 32, 32, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
+	# Pyramid-Level Synthesis with Downsampling/Upsampling
+	# Downsample texture, full_grid tensor, and mask? 
+	# Get shapes of each and mess around/experiment? 
+ 
 	search = Search(texture)
 	optimize = Optimize()
 	if show:
