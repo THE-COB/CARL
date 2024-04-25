@@ -1,8 +1,7 @@
 import torch 
+import torch.nn.functional as F
 import torchvision
-import matplotlib.pyplot as plt
 import tyro
-from pathlib import Path
 import viser
 import trimesh
 import viser.transforms as tf
@@ -87,6 +86,23 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	return neighborhood
 
 
+def custom_interpolate(x, scale_factor): 
+	# TODO fix the mode of interpolation to bilinear and bicubic
+	# F.interpolate expects (B C ...)
+	if len(x.shape) == 3:
+		# 2D texture case (H, W, C) 
+		x = F.interpolate(x.permute(2,0,1).unsqueeze(0), scale_factor=scale_factor)
+		return x[0].permute(1,2,0)
+	elif len(x.shape) == 4 and x.shape[0] == 1:
+		# 2D "solid" case (D, H, W, C) with depth = 1 which should NOT be downsampled 
+		x = F.interpolate(x.permute(3,0,1,2).unsqueeze(0), scale_factor=(1, scale_factor, scale_factor))
+		return x[0].permute(1,2,3,0)
+	elif len(x.shape) == 4 and x.shape[0] > 1:
+		# 3D solid case (D, H, W, C) 
+		x = F.interpolate(x.permute(3,0,1,2).unsqueeze(0), scale_factor=scale_factor)
+		return x[0].permute(1,2,3,0)
+	raise Exception("Uh oh, error in interpolation")
+
 
 def main(texture_file: str = 'tomatoes.png', 
 		 object_file: str = 'cow.obj',
@@ -100,6 +116,7 @@ def main(texture_file: str = 'tomatoes.png',
 		 test_2d: bool = False,
 		 neighborhood_dim: int = 8,
 		 r: float = 0.8,
+		 resolutions: list[float] = [1],
 		 device: str = 'cpu'):
 	
 	# Load and sample texture
@@ -126,21 +143,35 @@ def main(texture_file: str = 'tomatoes.png',
 		full_grid_tensor = sample_texture(texture, (1, neighborhood_dim**2, neighborhood_dim**2, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
-	search = Search(texture, neighborhood_dim=neighborhood_dim)
 	optimize = Optimize(r=r)
-	
-	tensor_show(full_grid_tensor, show=True)
+	import pdb; pdb.set_trace()
+	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
+	for i in range(len(resolutions)):
+		scale = resolutions[i]
+		print(f"Commencing optimization at resolution {scale}")
+		import pdb; pdb.set_trace()
+		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
+		tensor_show(downsampled_full_grid, show=True)
+		tensor_show(downsampled_texture, show=True)
 
-	for i in tqdm(range(num_iters)):
-		index = sample_voxel(mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
-		neighborhood = sample_neighborhood(full_grid_tensor, index, neighborhood_dim=neighborhood_dim)
-		texel_match = search.find(neighborhood)
-		
-		new_value = optimize(exemplar=texel_match, solid=neighborhood)
-		full_grid_tensor[index.T[0], index.T[1], index.T[2]] = new_value
+		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim)
+		for i in tqdm(range(num_iters)):
+			index = sample_voxel(mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
+			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
+			texel_match = search.find(neighborhood)
+			
+			new_value = optimize(exemplar=texel_match, solid=neighborhood)
+			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value
 
-		grid_show(texels=texel_match, voxels=neighborhood, show=i%(num_iters//4) == 0 and show)
-		tensor_show(full_grid_tensor, show=i%(num_iters//4) == 0 and show)	
+			grid_show(texels=texel_match, voxels=neighborhood, show=i%(num_iters//4) == 0 and show)
+			tensor_show(downsampled_full_grid, show=i%(num_iters//4) == 0 and show)	
+
+		if i + 1 < len(resolutions):
+			print(f"Upsampling optimized tensor to resolution {resolutions[i+1]}")
+			downsampled_full_grid = custom_interpolate(
+				downsampled_full_grid, 
+				scale_factor=int(resolutions[i+1]/resolutions[i]),
+				mode='bicubic')
 
 	colors = pointify_tensor(full_grid_tensor, mask=mask)
 
