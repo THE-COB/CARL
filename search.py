@@ -32,8 +32,7 @@ class Search:
 		
 		# Necessary to empty tmp because otherwise previous embeddings will be included 
 		if os.path.isdir('tmp/'):
-			for dir_ in os.listdir('tmp/'):
-				shutil.rmtree(f'tmp/{dir_}')
+			shutil.rmtree('tmp/')
 		self.ann = AnnLite(self.rank, metric='cosine', data_path="tmp/")
 		docs = DocumentArray.empty(self.texel_embeddings.shape[0])
 		docs.embeddings = self.texel_embeddings

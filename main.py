@@ -109,7 +109,7 @@ def main(texture_file: str = 'tomatoes.png',
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
 		 pitch: float = 0.1,
-		 num_iters: int = 2,
+		 num_iters: int = 4,
 		 show: bool = True, 
 		 batch_size: int = 32, 
 		 show_3d: bool = True,
@@ -118,7 +118,8 @@ def main(texture_file: str = 'tomatoes.png',
 		 r: float = 0.8,
 		 resolutions: list[float] = [1],
 		 device: str = 'cpu'):
-	
+	assert num_iters >= 4, "Iterate more. 4 is too few"
+
 	# Load and sample texture
 	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float() / 255.0
 	
@@ -139,24 +140,27 @@ def main(texture_file: str = 'tomatoes.png',
 	
 		full_grid_tensor = randomize_voxels(full_grid, texture)
 		mask = full_grid.matrix
+		# convert mask to tensor
+		mask = torch.from_numpy(mask).bool()
 	else:
 		full_grid_tensor = sample_texture(texture, (1, neighborhood_dim**2, neighborhood_dim**2, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	optimize = Optimize(r=r)
-	import pdb; pdb.set_trace()
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
 	for i in range(len(resolutions)):
 		scale = resolutions[i]
 		print(f"Commencing optimization at resolution {scale}")
-		import pdb; pdb.set_trace()
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
+		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
 		tensor_show(downsampled_full_grid, show=True)
-		tensor_show(downsampled_texture, show=True)
+		import matplotlib.pyplot as plt
+		plt.imshow(downsampled_texture)
+		plt.show()
 
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim)
 		for i in tqdm(range(num_iters)):
-			index = sample_voxel(mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
+			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood)
 			
