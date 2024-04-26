@@ -9,10 +9,11 @@ import shutil
 import os
 
 class Search:
-	def __init__(self, exemplar, rank=5, neighborhood_dim=8): 
+	def __init__(self, exemplar, rank=5, neighborhood_dim=8, index=-1): 
 		# precompute PCA of exemplar patches
 		self.rank = rank
 		self.neighborhood_dim = neighborhood_dim
+		self.dir = index
 		self.set_pca_coordinates(exemplar)
 		
 	def set_pca_coordinates(self, exemplar):
@@ -30,10 +31,11 @@ class Search:
 		for idx, sample in enumerate(samples):
 			self.pca_to_samples[self.texel_embeddings[idx]] = sample
 		
-		# Necessary to empty tmp because otherwise previous embeddings will be included 
-		if os.path.isdir('tmp/'):
-			shutil.rmtree('tmp/')
-		self.ann = AnnLite(self.rank, metric='cosine', data_path="tmp/")
+		# Necessary to empty tmp because otherwise previous embeddings will be included
+		_dir = f"tmp_{self.dir}"
+		if os.path.isdir(_dir):
+			shutil.rmtree(_dir)
+		self.ann = AnnLite(self.rank, metric='cosine', data_path=_dir)
 		docs = DocumentArray.empty(self.texel_embeddings.shape[0])
 		docs.embeddings = self.texel_embeddings
 		self.ann.index(docs)
@@ -61,6 +63,12 @@ class Search:
 		
 		matches = einops.rearrange(matches, '(n p) (h w c) -> n p h w c', n=n, p=p, h=h, w=w, c=c)
 		return matches
+	
+	def remove_cache(self):
+		for i in range(self.dir+1):
+			if os.path.isdir(f"tmp_{i}"):
+				print(f"Removing the cached values at tmp_{i}/")
+				shutil.rmtree(f"tmp_{i}")
 
 
 

@@ -86,7 +86,7 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	return neighborhood
 
 
-def custom_interpolate(x, scale_factor): 
+def custom_interpolate(x, scale_factor, mode=None): 
 	# TODO fix the mode of interpolation to bilinear and bicubic
 	# F.interpolate expects (B C ...)
 	if len(x.shape) == 3:
@@ -148,8 +148,8 @@ def main(texture_file: str = 'tomatoes.png',
 	
 	optimize = Optimize(r=r)
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
-	for i in range(len(resolutions)):
-		scale = resolutions[i]
+	for r in range(len(resolutions)):
+		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
@@ -158,7 +158,7 @@ def main(texture_file: str = 'tomatoes.png',
 		plt.imshow(downsampled_texture)
 		plt.show()
 
-		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim)
+		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r)
 		for i in tqdm(range(num_iters)):
 			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
@@ -168,16 +168,19 @@ def main(texture_file: str = 'tomatoes.png',
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value
 
 			grid_show(texels=texel_match, voxels=neighborhood, show=i%(num_iters//4) == 0 and show)
-			tensor_show(downsampled_full_grid, show=i%(num_iters//4) == 0 and show)	
-
-		if i + 1 < len(resolutions):
-			print(f"Upsampling optimized tensor to resolution {resolutions[i+1]}")
+			#tensor_show(downsampled_full_grid, show=i%(num_iters//4) == 0 and show)	
+		if r + 1 < len(resolutions):
+			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
 			downsampled_full_grid = custom_interpolate(
 				downsampled_full_grid, 
-				scale_factor=int(resolutions[i+1]/resolutions[i]),
+				scale_factor=int(resolutions[r+1]/resolutions[r]),
 				mode='bicubic')
 
+	tensor_show(downsampled_full_grid, show=True)
 	colors = pointify_tensor(full_grid_tensor, mask=mask)
+	
+	search.remove_cache()
+ 
 
 	# display mesh
 	if not test_2d and show_3d:
