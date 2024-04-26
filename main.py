@@ -146,12 +146,14 @@ def main(texture_file: str = 'tomatoes.png',
 		end = time.time()
 		print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	
-		full_grid_tensor = randomize_voxels(full_grid, texture)
+		full_grid_tensor = randomize_voxels(full_grid, texture, padding=neighborhood_dim)
 		mask = full_grid.matrix
 		# convert mask to tensor
 		mask = torch.from_numpy(mask).bool()
 	else:
-		full_grid_tensor = sample_texture(texture, (1, neighborhood_dim**2, neighborhood_dim**2, 3))
+		full_grid_tensor = sample_texture(
+			texture, 
+			(1, neighborhood_dim**2 + neighborhood_dim, neighborhood_dim**2 + neighborhood_dim, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
@@ -168,7 +170,7 @@ def main(texture_file: str = 'tomatoes.png',
 
 		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist)
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
-		for i in tqdm(range(num_iters)):
+		for i in tqdm(range(int(num_iters * scale))):
 			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood)
@@ -185,6 +187,9 @@ def main(texture_file: str = 'tomatoes.png',
 				scale_factor=int(resolutions[r+1]/resolutions[r]),
 				mode='bicubic')
 
+	if test_2d:
+		downsampled_full_grid = downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :]
+	
 	tensor_show(downsampled_full_grid, show=True)
 	colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
