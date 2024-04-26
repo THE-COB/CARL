@@ -9,11 +9,12 @@ import shutil
 import os
 
 class Search:
-	def __init__(self, exemplar, rank=5, neighborhood_dim=8, index=-1): 
+	def __init__(self, exemplar, rank=5, neighborhood_dim=8, index=-1, experiment_name=None): 
 		# precompute PCA of exemplar patches
 		self.rank = rank
 		self.neighborhood_dim = neighborhood_dim
 		self.dir = index
+		self.experiment_name = experiment_name
 		self.set_pca_coordinates(exemplar)
 		
 	def set_pca_coordinates(self, exemplar):
@@ -32,7 +33,7 @@ class Search:
 			self.pca_to_samples[self.texel_embeddings[idx]] = sample
 		
 		# Necessary to empty tmp because otherwise previous embeddings will be included
-		_dir = f"tmp_{self.dir}"
+		_dir = f"tmp/{self.experiment_name}_{self.dir}"
 		if os.path.isdir(_dir):
 			shutil.rmtree(_dir)
 		self.ann = AnnLite(self.rank, metric='cosine', data_path=_dir)
@@ -66,9 +67,9 @@ class Search:
 	
 	def remove_cache(self):
 		for i in range(self.dir+1):
-			if os.path.isdir(f"tmp_{i}"):
-				print(f"Removing the cached values at tmp_{i}/")
-				shutil.rmtree(f"tmp_{i}")
+			if os.path.isdir(f"tmp/{self.experiment_name}_{i}"):
+				print(f"Removing the cached values at tmp/{self.experiment_name}_{i}/")
+				shutil.rmtree(f"tmp/{self.experiment_name}_{i}")
 
 
 

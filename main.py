@@ -7,6 +7,7 @@ import trimesh
 import viser.transforms as tf
 import numpy as np
 import time
+from datetime import datetime
 
 from tqdm import tqdm
 from search import Search
@@ -117,9 +118,16 @@ def main(texture_file: str = 'tomatoes.png',
 		 neighborhood_dim: int = 8,
 		 r: float = 0.8,
 		 resolutions: list[float] = [1],
-		 device: str = 'cpu'):
+		 display_freq: int = 4,
+		 use_hist: bool = True,
+		 experiment_name: str = None,
+		 device: str = 'cpu',
+		 ):
 	assert num_iters >= 4, "Iterate more. 4 is too few"
 
+	if experiment_name is None:
+		now = datetime.now()
+		experiment_name = now.strftime("%m-%d-%Y_%H-%M-%S")
 	# Load and sample texture
 	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float() / 255.0
 	
@@ -146,19 +154,20 @@ def main(texture_file: str = 'tomatoes.png',
 		full_grid_tensor = sample_texture(texture, (1, neighborhood_dim**2, neighborhood_dim**2, 3))
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
-	optimize = Optimize(r=r)
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
 	for r in range(len(resolutions)):
 		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
-		tensor_show(downsampled_full_grid, show=True)
+		tensor_show(downsampled_full_grid, show=show)
 		import matplotlib.pyplot as plt
-		plt.imshow(downsampled_texture)
-		plt.show()
+		if show:
+			plt.imshow(downsampled_texture)
+			plt.show()
 
-		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r)
+		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist)
+		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
 		for i in tqdm(range(num_iters)):
 			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
@@ -167,8 +176,8 @@ def main(texture_file: str = 'tomatoes.png',
 			new_value = optimize(exemplar=texel_match, solid=neighborhood)
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value
 
-			grid_show(texels=texel_match, voxels=neighborhood, show=i%(num_iters//4) == 0 and show)
-			#tensor_show(downsampled_full_grid, show=i%(num_iters//4) == 0 and show)	
+			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
+			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
 			downsampled_full_grid = custom_interpolate(
