@@ -1,4 +1,5 @@
 .DS_Store
 objs
 __pycache__
-tmp
+tmp*
+outputs*
