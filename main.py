@@ -8,6 +8,8 @@ import viser.transforms as tf
 import numpy as np
 import time
 from datetime import datetime
+import matplotlib.pyplot as plt
+import os 
 
 from tqdm import tqdm
 from search import Search
@@ -105,7 +107,7 @@ def custom_interpolate(x, scale_factor, mode=None):
 	raise Exception("Uh oh, error in interpolation")
 
 
-def main(texture_file: str = 'tomatoes.png', 
+def main(texture_file: str = 'zebra.png', 
 		 object_file: str = 'cow.obj',
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
@@ -124,7 +126,7 @@ def main(texture_file: str = 'tomatoes.png',
 		 device: str = 'cpu',
 		 ):
 	assert num_iters >= 4, "Iterate more. 4 is too few"
-
+	
 	if experiment_name is None:
 		now = datetime.now()
 		experiment_name = now.strftime("%m-%d-%Y_%H-%M-%S")
@@ -162,8 +164,8 @@ def main(texture_file: str = 'tomatoes.png',
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
-		tensor_show(downsampled_full_grid, show=show)
-		import matplotlib.pyplot as plt
+		
+		tensor_show(downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :], show=show)
 		if show:
 			plt.imshow(downsampled_texture)
 			plt.show()
@@ -191,7 +193,12 @@ def main(texture_file: str = 'tomatoes.png',
 		downsampled_full_grid = downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :]
 	
 	tensor_show(downsampled_full_grid, show=True)
-	colors = pointify_tensor(full_grid_tensor, mask=mask)
+	if test_2d:
+		os.makedirs("outputs/", exist_ok=True)
+		hist = "" if use_hist else "no"
+		plt.imsave(f'outputs/zebra_{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', downsampled_full_grid[0].numpy())
+	else: 
+		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
 	search.remove_cache()
  
