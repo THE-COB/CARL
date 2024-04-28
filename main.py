@@ -208,6 +208,9 @@ def main(texture_file: str = 'zebra.png',
 	
 	search.remove_cache()
  
+	ax = plt.figure().add_subplot(projection='3d')
+	ax.voxels(full_grid_tensor[:, :, :, 0].nonzero().cpu().numpy() * pitch, facecolors=full_grid_tensor, edgecolors='k')
+ 
 
 	# display mesh
 	if not test_2d and show_3d:
