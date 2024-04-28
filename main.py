@@ -16,7 +16,7 @@ from search import Search
 from optimize import Optimize
 from utils import sample_texture, grid_show, tensor_show, pointify_tensor
 
-def randomize_voxels(full_grid, texture):
+def randomize_voxels(full_grid, texture, padding=0):
 	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float()
 	
 	num_samples = full_grid_tensor.shape[0] * full_grid_tensor.shape[1] * full_grid_tensor.shape[2]
@@ -164,7 +164,8 @@ def main(texture_file: str = 'zebra.png',
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
-		
+		if any(torch.tensor(downsampled_mask.shape) <= neighborhood_dim):
+			continue 
 		tensor_show(downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :], show=show)
 		if show:
 			plt.imshow(downsampled_texture)
