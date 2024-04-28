@@ -9,7 +9,7 @@ class Optimize:
         self.device = device
         if use_hist:
             self.num_bins = num_bins
-            self.texture_hists = self.create_hist(texture.unsqueeze(0).unsqueeze(0))
+            self.texture_hists = self.create_hist(texture.unsqueeze(0).unsqueeze(0).to(device))
 
 
 
