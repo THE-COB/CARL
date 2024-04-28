@@ -214,10 +214,35 @@ def main(texture_file: str = 'zebra.png',
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
-	search.remove_cache()
+	# search.remove_cache()
  
 	ax = plt.figure().add_subplot(projection='3d')
-	ax.voxels(full_grid_tensor[:, :, :, 0].nonzero().cpu().numpy() * pitch, facecolors=full_grid_tensor, edgecolors='k')
+	ax.voxels(full_grid.matrix,
+			facecolors=full_grid_tensor.cpu().numpy(),
+			linewidth=0.5)
+	ax.set_aspect('equal')
+	# Hide grid lines
+	ax.grid(False)
+
+	# Hide axes ticks
+	ax.set_xticks([])
+	ax.set_yticks([])
+	ax.set_zticks([])
+	plt.axis('off')
+
+	ax.view_init(elev=30, azim=30)
+
+	# Save multiple views
+	angle_step = 5  # Step size for camera movement
+	num_steps = 16  # Total number of steps for a full rotation (360 degrees)
+
+	for step in range(num_steps):
+		azimuth_angle = 360 * (step / num_steps)  # Azimuth angle ranges from 0 to 360 degrees
+		elevation_angle = 30 * np.sin(np.pi * (step / num_steps))  # Elevation angle varies sinusoidally from -30 to 30 degrees
+		ax.view_init(elev=elevation_angle, azim=azimuth_angle)
+		plt.savefig(f"voxel_grid_spherical_{step}.png")
+
+	plt.show()
 
 	# display mesh
 	if not test_2d and show_3d:
