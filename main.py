@@ -219,10 +219,10 @@ def main(texture_file: str = 'zebra.png',
 				mode='bicubic').bool().squeeze(-1)
 
 	tensor_show(downsampled_full_grid, show=True)
+	os.makedirs(f"outputs/{experiment_name}", exist_ok=True)
 	if test_2d:
-		os.makedirs("outputs/", exist_ok=True)
 		hist = "_" if use_hist else "_no"
-		plt.imsave(f'outputs/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters_{experiment_name}.png', 
+		plt.imsave(f'outputs/{experiment_name}/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', 
              downsampled_full_grid[0].cpu().numpy())
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
@@ -230,7 +230,32 @@ def main(texture_file: str = 'zebra.png',
 	search.remove_cache()
  
 	# convert colored voxel grid into a ply
-	
+	if not test_2d:
+		ax = plt.figure().add_subplot(projection='3d')
+		ax.voxels(full_grid.matrix,
+				facecolors=full_grid_tensor.cpu().numpy(),
+				linewidth=0.5)
+		ax.set_aspect('equal')
+		# Hide grid lines
+		ax.grid(False)
+
+		# Hide axes ticks
+		ax.set_xticks([])
+		ax.set_yticks([])
+		ax.set_zticks([])
+		plt.axis('off')
+
+		ax.view_init(elev=30, azim=30)
+
+		# Save multiple views
+		angle_step_size = 45
+		for theta in range(0, 360, angle_step_size):
+			for phi in range(0, 180, angle_step_size):
+				ax.view_init(elev=phi, azim=theta)
+				plt.savefig(f"outputs/{experiment_name}/{texture_file.split('.')[0]}_{object_file.split('.')[0]}_voxel_grid_{theta}_{phi}.png")
+
+		if show:
+			plt.show()
 
 	# display mesh
 	if not test_2d and show_3d:
