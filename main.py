@@ -139,7 +139,7 @@ def main(texture_file: str = 'zebra.png',
 		 experiment_name: str = None,
 		 device: str = 'cpu',
 		 ):
-	assert num_iters >= 4, "Iterate more. 4 is too few"
+	# assert num_iters >= 4, "Iterate more. 4 is too few"
 	
 	if experiment_name is None:
 		now = datetime.now()
@@ -192,16 +192,18 @@ def main(texture_file: str = 'zebra.png',
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
 		downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 
-		for i in tqdm(range(int(num_iters * scale))):
-			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
-			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
-			texel_match = search.find(neighborhood)
-			
-			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
-			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
+		for i in range(int(num_iters * scale)):
+			for z in range(downsampled_full_grid.shape[0]):
+				for x in tqdm(range(neighborhood_dim, downsampled_full_grid.shape[1] - neighborhood_dim)):
+					for y in range(neighborhood_dim, downsampled_full_grid.shape[2] - neighborhood_dim):
+						index = torch.tensor([[z, x, y]])  # Current voxel index
+						neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
+						texel_match = search.find(neighborhood)
+						new_value = optimize(exemplar=texel_match, solid=neighborhood)
+						downsampled_full_grid[z, x, y] = new_value
 
-			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
-			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
+		grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
+		tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
 			downsampled_full_grid = custom_interpolate(
