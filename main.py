@@ -220,6 +220,7 @@ def main(texture_file: str = 'zebra.png',
 
 	tensor_show(downsampled_full_grid, show=True)
 	os.makedirs(f"outputs/{experiment_name}", exist_ok=True)
+	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/{texture_file.split('.')[0]}_{object_file.split('.')[0]}_voxel_grid.pt")
 	if test_2d:
 		hist = "_" if use_hist else "_no"
 		plt.imsave(f'outputs/{experiment_name}/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', 
@@ -227,7 +228,7 @@ def main(texture_file: str = 'zebra.png',
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
-	search.remove_cache()
+	# search.remove_cache()
  
 	# convert colored voxel grid into a ply
 	if not test_2d:
