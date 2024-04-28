@@ -206,16 +206,17 @@ def main(texture_file: str = 'zebra.png',
 	# 	downsampled_full_grid = downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :]
 	
 	tensor_show(downsampled_full_grid, show=True)
+	os.makedirs(f"outputs/{experiment_name}", exist_ok=True)
 	if test_2d:
-		os.makedirs("outputs/", exist_ok=True)
 		hist = "_" if use_hist else "_no"
-		plt.imsave(f'outputs/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters_{experiment_name}.png', 
+		plt.imsave(f'outputs/{experiment_name}/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', 
              downsampled_full_grid[0].cpu().numpy())
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
 	# search.remove_cache()
  
+		# convert colored voxel grid into a ply
 	ax = plt.figure().add_subplot(projection='3d')
 	ax.voxels(full_grid.matrix,
 			facecolors=full_grid_tensor.cpu().numpy(),
@@ -233,14 +234,13 @@ def main(texture_file: str = 'zebra.png',
 	ax.view_init(elev=30, azim=30)
 
 	# Save multiple views
-	angle_step = 5  # Step size for camera movement
-	num_steps = 16  # Total number of steps for a full rotation (360 degrees)
+	angle_step_size = 45
+	for theta in range(0, 360, angle_step_size):
+		for phi in range(0, 180, angle_step_size):
+			ax.view_init(elev=phi, azim=theta)
+			plt.savefig(f"outputs/{experiment_name}/{texture_file.split('.')[0]}_voxel_grid_{theta}_{phi}.png")
 
-	for step in range(num_steps):
-		azimuth_angle = 360 * (step / num_steps)  # Azimuth angle ranges from 0 to 360 degrees
-		elevation_angle = 30 * np.sin(np.pi * (step / num_steps))  # Elevation angle varies sinusoidally from -30 to 30 degrees
-		ax.view_init(elev=elevation_angle, azim=azimuth_angle)
-		plt.savefig(f"voxel_grid_spherical_{step}.png")
+	plt.show()
 
 	plt.show()
 
