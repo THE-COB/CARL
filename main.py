@@ -105,11 +105,16 @@ def generate_indices(x, batch_size, shuffle=False):
 	indices = torch.stack((d_mesh.flatten(), h_mesh.flatten(), w_mesh.flatten()), dim=1)
 	assert indices.shape == (D*H*W, 3) 
 	
-	# if shuffle: 
-	shuffled_idx = torch.randperm(D*H*W)
-	indices = indices[shuffled_idx]
+	if shuffle: 
+		shuffled_idx = torch.randperm(D*H*W)
+		indices = indices[shuffled_idx]
 
-	return rearrange(indices, '(n b) c -> n b c',b=batch_size)
+	true_indices = indices[x[indices.T[0], indices.T[1], indices.T[2]]]
+	# make sure it's divisible by batch size 
+	missing_indices = batch_size - (indices.shape[0] % batch_size)
+	true_indices = torch.vstack([true_indices, true_indices[:missing_indices]])
+	batched_indices=rearrange(indices, '(n b) c -> n b c',b=batch_size)
+	return batched_indices
 
 def custom_interpolate(x, scale_factor, mode=None): 
 	# TODO fix the mode of interpolation to bilinear and bicubic
@@ -203,18 +208,7 @@ def main(texture_file: str = 'zebra.png',
 		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
-		tex = downsampled_mask.shape[1:] if test_2d else downsampled_mask.shape
-		if min(tex) <= neighborhood_dim:
-			print(f"Skipping resolution {scale} (too downsampled)")
-			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
-			downsampled_full_grid = custom_interpolate(
-				downsampled_full_grid, 
-				scale_factor=int(resolutions[r+1]/resolutions[r]),
-				mode='bicubic')
-			downsampled_mask = custom_interpolate(
-				downsampled_mask.float().unsqueeze(-1), 
-				scale_factor=int(resolutions[r+1]/resolutions[r]),
-				mode='bicubic').bool().squeeze(-1)
+	
 		tensor_show(downsampled_full_grid, show=show)
 		if show:
 			plt.imshow(downsampled_texture)
@@ -223,8 +217,6 @@ def main(texture_file: str = 'zebra.png',
 		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist, device=device)
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
 		downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
-
-		batch_size = min(downsampled_mask.shape[1], downsampled_mask.shape[2])
 
 		if deterministic:
 			print("Generating deterministic indices")
