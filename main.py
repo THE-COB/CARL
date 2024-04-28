@@ -37,7 +37,6 @@ def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhoo
 	"""
 	#select random voxel 
 	d, h, w = full_grid_mask.shape
-	padding = neighborhood_dim//2
 	device = full_grid_mask.device
 	
 	h_index = torch.randint(0, h, size=(batch_size,1), device=device)
@@ -45,7 +44,7 @@ def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhoo
 	if d == 1:
 		d_index = torch.zeros_like(h_index, device=device)
 	else:
-		d_index = torch.randint(padding, d-padding, size=(batch_size,1), device=device)
+		d_index = torch.randint(0, d, size=(batch_size,1), device=device)
 	index = torch.hstack([d_index, h_index, w_index])
 	true_index = index[full_grid_mask[index.T[0],index.T[1],index.T[2]]]
 	if len(true_index)== 0: 
@@ -54,7 +53,7 @@ def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhoo
 		return true_index
 
 	
-def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, neighborhood_dim: int = 8) -> torch.Tensor:
+def sample_neighborhood(full_grid_tensor_padded: torch.Tensor, index: torch.Tensor, neighborhood_dim: int = 8) -> torch.Tensor:
 	"""
 	full_grid_tensor:  torch.Tensor (z, x, y, 3)
 	index:  torch.Tensor (batch_size, 3)
@@ -63,14 +62,7 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	return: torch.Tensor (batch_size, 3, neighborhood_dim, neighborhood_dim, 3)
 	"""
 	assert(neighborhood_dim % 2 == 0)
-	full_grid_tensor_padded = full_grid_tensor
-	pad_adjustment = 0
-	if full_grid_tensor.shape[0] > 1:
-		# pad full grid tensor by neighborhood_dim
-		pad_adjustment = neighborhood_dim // 2
-		full_grid_tensor_padded = F.pad(full_grid_tensor, 
-            (0, 0, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment), 
-            mode='constant', value=0)
+	pad_adjustment = neighborhood_dim // 2
 	
 	#find neighborhood of voxel
 
@@ -84,7 +76,7 @@ def sample_neighborhood(full_grid_tensor: torch.Tensor, index: torch.Tensor, nei
 	neighborhood = []
 	for i in range(index.shape[0]):
 		xy_grid = full_grid_tensor_padded[index[:, 0][0], x_start_indices[i]:x_end_indices[i], y_start_indices[i]:y_end_indices[i], :].unsqueeze(0)
-		if full_grid_tensor.shape[0] > 1:
+		if full_grid_tensor_padded.shape[0] > 1:
 			xz_grid = full_grid_tensor_padded[z_start_indices[i]:z_end_indices[i], index[:, 1][0], y_start_indices[i]:y_end_indices[i], :].unsqueeze(0)
 			yz_grid = full_grid_tensor_padded[z_start_indices[i]:z_end_indices[i], x_start_indices[i]:x_end_indices[i], index[:, 2][0], :].unsqueeze(0)
 			neighborhood.append(torch.vstack([xy_grid, xz_grid, yz_grid]).unsqueeze(0))
@@ -115,6 +107,19 @@ def custom_interpolate(x, scale_factor, mode=None):
 		return x[0].permute(1,2,3,0)
 	raise Exception("Uh oh, error in interpolation")
 
+def custom_pad(tensor, neighborhood_dim):
+	pad_adjustment = neighborhood_dim//2
+	if tensor.shape[0] > 1:
+		# In 3D case, pad D, H, W. Never pad batch dimension
+		pad = (pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment)
+		tensor = tensor.permute(3,0,1,2).unsqueeze(0)
+		tensor_padded = F.pad(tensor, pad=pad, mode='circular')[0].permute(1,2,3,0)
+	else: 
+		# In 2D case, pad only H, W. Never pad batch dimension
+		pad = (pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment)	
+		tensor_padded = F.pad(tensor.permute(3,0,1,2), pad=pad, mode='circular').permute(1,2,3,0)
+
+	return tensor_padded
 
 def main(texture_file: str = 'zebra.png', 
 		 object_file: str = 'cow.obj',
@@ -185,9 +190,11 @@ def main(texture_file: str = 'zebra.png',
 
 		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist, device=device)
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
+		downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
+
 		for i in tqdm(range(int(num_iters * scale))):
 			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
-			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
+			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood)
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
@@ -202,9 +209,6 @@ def main(texture_file: str = 'zebra.png',
 				scale_factor=int(resolutions[r+1]/resolutions[r]),
 				mode='bicubic')
 
-	# if test_2d:
-	# 	downsampled_full_grid = downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :]
-	
 	tensor_show(downsampled_full_grid, show=True)
 	if test_2d:
 		os.makedirs("outputs/", exist_ok=True)
