@@ -174,11 +174,12 @@ def main(texture_file: str = 'zebra.png',
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
+	downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=resolutions[0]).bool().squeeze(-1)
+
 	for r in range(len(resolutions)):
 		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
-		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
 		tex = downsampled_mask.shape[1:] if test_2d else downsampled_mask.shape
 		if min(tex) <= neighborhood_dim:
 			print(f"Skipping resolution {scale} (too downsampled)")
@@ -198,16 +199,24 @@ def main(texture_file: str = 'zebra.png',
 			texel_match = search.find(neighborhood)
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
-			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
+			try:
+				downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
+			except: 
+				print(index)
 
 			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
 			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
+		
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
 			downsampled_full_grid = custom_interpolate(
 				downsampled_full_grid, 
 				scale_factor=int(resolutions[r+1]/resolutions[r]),
 				mode='bicubic')
+			downsampled_mask = custom_interpolate(
+				downsampled_mask.float().unsqueeze(-1), 
+				scale_factor=int(resolutions[r+1]/resolutions[r]),
+				mode='bicubic').bool().squeeze(-1)
 
 	tensor_show(downsampled_full_grid, show=True)
 	if test_2d:
