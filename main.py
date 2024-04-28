@@ -16,8 +16,8 @@ from search import Search
 from optimize import Optimize
 from utils import sample_texture, grid_show, tensor_show, pointify_tensor
 
-def randomize_voxels(full_grid, texture, padding=0):
-	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float()
+def randomize_voxels(full_grid, texture, padding=0, device="cpu"):
+	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float().to(device)
 	
 	num_samples = full_grid_tensor.shape[0] * full_grid_tensor.shape[1] * full_grid_tensor.shape[2]
 	num_pixels = texture.shape[0] * texture.shape[1]
@@ -38,13 +38,14 @@ def sample_voxel(full_grid_mask: torch.Tensor, batch_size: int = 16, neighborhoo
 	#select random voxel 
 	d, h, w = full_grid_mask.shape
 	padding = neighborhood_dim//2
+	device = full_grid_mask.device
 	
-	h_index = torch.randint(padding, h-padding, size=(batch_size,1))
-	w_index = torch.randint(padding, w-padding, size=(batch_size,1))
+	h_index = torch.randint(padding, h-padding, size=(batch_size,1), device=device)
+	w_index = torch.randint(padding, w-padding, size=(batch_size,1), device=device)
 	if d == 1:
-		d_index = torch.zeros_like(h_index)
+		d_index = torch.zeros_like(h_index, device=device)
 	else:
-		d_index = torch.randint(padding, d-padding, size=(batch_size,1))
+		d_index = torch.randint(padding, d-padding, size=(batch_size,1), device=device)
 	index = torch.hstack([d_index, h_index, w_index])
 	true_index = index[full_grid_mask[index.T[0],index.T[1],index.T[2]]]
 	if len(true_index)== 0: 
@@ -131,7 +132,7 @@ def main(texture_file: str = 'zebra.png',
 		now = datetime.now()
 		experiment_name = now.strftime("%m-%d-%Y_%H-%M-%S")
 	# Load and sample texture
-	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float() / 255.0
+	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float().to(device) / 255.0
 	
 	if not test_2d:
 		# load mesh
@@ -148,23 +149,26 @@ def main(texture_file: str = 'zebra.png',
 		end = time.time()
 		print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	
-		full_grid_tensor = randomize_voxels(full_grid, texture, padding=neighborhood_dim)
+		full_grid_tensor = randomize_voxels(full_grid, texture, padding=neighborhood_dim, device=device)
 		mask = full_grid.matrix
 		# convert mask to tensor
-		mask = torch.from_numpy(mask).bool()
+		mask = torch.from_numpy(mask).bool().to(device)
 	else:
 		full_grid_tensor = sample_texture(
 			texture, 
-			(1, neighborhood_dim**2 + neighborhood_dim, neighborhood_dim**2 + neighborhood_dim, 3))
-		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
+			(1, neighborhood_dim**2 + neighborhood_dim, neighborhood_dim**2 + neighborhood_dim, 3),
+   			device=device
+      	)
+		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool().to(device)
 	
-	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
+	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0]).to(device)
 	for r in range(len(resolutions)):
 		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
-		if any(torch.tensor(downsampled_mask.shape) <= neighborhood_dim):
+		tex_h, tex_w = downsampled_mask.shape[1:] if test_2d else downsampled_mask.shape
+		if min(tex_h, tex_w) <= neighborhood_dim:
 			print(f"Skipping resolution {scale} (too downsampled)")
 			continue 
 		tensor_show(downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :], show=show)
@@ -172,12 +176,12 @@ def main(texture_file: str = 'zebra.png',
 			plt.imshow(downsampled_texture)
 			plt.show()
 
-		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist)
-		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
+		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist, device=device)
+		search = Search(downsampled_texture.cpu(), neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
 		for i in tqdm(range(int(num_iters * scale))):
 			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid, index, neighborhood_dim=neighborhood_dim)
-			texel_match = search.find(neighborhood)
+			texel_match = search.find(neighborhood.cpu()).to(device)
 			
 			new_value = optimize(exemplar=texel_match, solid=neighborhood)
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value
@@ -198,7 +202,7 @@ def main(texture_file: str = 'zebra.png',
 	if test_2d:
 		os.makedirs("outputs/", exist_ok=True)
 		hist = "" if use_hist else "no"
-		plt.imsave(f'outputs/zebra_{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', downsampled_full_grid[0].numpy())
+		plt.imsave(f'outputs/zebra_{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', downsampled_full_grid[0].cpu().numpy())
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
@@ -223,7 +227,7 @@ def main(texture_file: str = 'zebra.png',
 		# display voxels in viser and sample colors from texture
 		server.add_point_cloud(
 			name="/full_grid",
-			points=full_grid_tensor[:, :, :, 0].nonzero().numpy() * pitch,
+			points=full_grid_tensor[:, :, :, 0].nonzero().cpu().numpy() * pitch,
 			position=(0.0, 0.0, 0.0),
 			colors=(255, 0 , 0),
 			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,

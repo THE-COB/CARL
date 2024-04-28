@@ -43,12 +43,13 @@ def tensorize_mesh(mesh, pitch=0.01):
 	planes = planes.repeat(1, 1, 1, 3)
 	return planes
 
-def sample_texture(texture, im_shape):
+def sample_texture(texture, im_shape, device='cpu'):
 	im_shape = (4 - len(im_shape)) * (1,) + im_shape
 	num_samples = im_shape[1] * im_shape[2] 
 	num_pixels = texture.shape[0] * texture.shape[1]
 	p = torch.ones(num_pixels)/num_pixels # Initialize a uniform distribution over samples
-	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True) #samples from uniform distribution
+	p = p.to(device)
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True).to(device) #samples from uniform distribution
 	init = texture.view((-1, 3))[index].reshape(im_shape) # gets colors of sampled pixels from texture image + shapes into texture shape
 	return init
 
@@ -68,7 +69,7 @@ def grid_show(texels, voxels, show):
 def tensor_show(tensor, show):
 	if show:
 		slice = torch.randint(tensor.shape[0], (1,))[0]
-		plt.imshow(tensor[slice].numpy())
+		plt.imshow(tensor[slice].cpu().numpy())
 		plt.show()
 
 def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):

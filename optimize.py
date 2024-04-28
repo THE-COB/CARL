@@ -2,13 +2,14 @@ import torch
 import einops 
 
 class Optimize:
-    def __init__(self, texture, r=0.8, num_bins=16,use_hist=True):
+    def __init__(self, texture, r=0.8, num_bins=16,use_hist=True, device="cpu"):
         self.r = r
-        self.texture = texture
+        self.texture = texture * 255.0
         self.use_hist = use_hist
+        self.device = device
         if use_hist:
             self.num_bins = num_bins
-            self.texture_hists = self.create_hist(texture)
+            self.texture_hists = self.create_hist(texture.unsqueeze(0).unsqueeze(0))
 
 
 
@@ -20,7 +21,9 @@ class Optimize:
         return:   torch.Tensor (n, 3)
         """
         exemplar = exemplar.clone() * 255.0
+        exemplar = exemplar.to(self.device)
         solid = solid.clone() * 255.0
+        solid = solid.to(self.device)
         # print(torch.max(exemplar), torch.max(solid))
         w = self.find_weight(exemplar, solid)
         if self.use_hist:
@@ -91,7 +94,7 @@ class Optimize:
     
     def create_hist(self, patch: torch.Tensor) -> torch.Tensor:
         """
-        patch: torch.Tensor (h, w, 3)
+        patch: torch.Tensor (n, d, h, w, 3)
         channel: int [0, 1, 2] - represents the color chosen
         num_bins: int - default 16
 
@@ -100,11 +103,11 @@ class Optimize:
 
         # texels = texture[..., channel].view(-1)
         # h = torch.histogram(texels.float(), bins=num_bins, min=0, max=255)
-        num_channels = patch.shape[-1]
-        return torch.stack([torch.histogram(
+        n, d, h, w, num_channels = patch.shape
+        return torch.stack([(torch.histc(
                                 patch[..., channel].view(-1).float(), 
                                 bins=self.num_bins, 
-                                range=(0, 255),
-                                density=True
-                            )[0] for channel in range(num_channels)], dim=0)
+                                min=0,
+                                max=255,
+                            )/d/h/w/n) for channel in range(num_channels)], dim=0)
 
