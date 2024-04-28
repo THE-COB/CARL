@@ -268,7 +268,7 @@ def main(texture_file: str = 'zebra.png',
 	else: 
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
-	# search.remove_cache()
+	search.remove_cache()
  
 	# convert colored voxel grid into a ply
 	if not test_2d:
