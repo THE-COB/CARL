@@ -206,7 +206,15 @@ def main(texture_file: str = 'zebra.png',
 		tex = downsampled_mask.shape[1:] if test_2d else downsampled_mask.shape
 		if min(tex) <= neighborhood_dim:
 			print(f"Skipping resolution {scale} (too downsampled)")
-			continue 
+			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
+			downsampled_full_grid = custom_interpolate(
+				downsampled_full_grid, 
+				scale_factor=int(resolutions[r+1]/resolutions[r]),
+				mode='bicubic')
+			downsampled_mask = custom_interpolate(
+				downsampled_mask.float().unsqueeze(-1), 
+				scale_factor=int(resolutions[r+1]/resolutions[r]),
+				mode='bicubic').bool().squeeze(-1)
 		tensor_show(downsampled_full_grid, show=show)
 		if show:
 			plt.imshow(downsampled_texture)
