@@ -165,6 +165,7 @@ def main(texture_file: str = 'zebra.png',
 		downsampled_texture = custom_interpolate(texture, scale_factor=scale)
 		downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=scale).bool().squeeze(-1)
 		if any(torch.tensor(downsampled_mask.shape) <= neighborhood_dim):
+			print(f"Skipping resolution {scale} (too downsampled)")
 			continue 
 		tensor_show(downsampled_full_grid[:, neighborhood_dim:-neighborhood_dim, neighborhood_dim:-neighborhood_dim, :], show=show)
 		if show:
