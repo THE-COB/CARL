@@ -51,7 +51,7 @@ class Search:
 		matches = []
 		for q in query:
 			embedding = q.matches[0].embedding
-			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()]]
+			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]]
 			matches.append(match)
 		return torch.vstack(matches)
 

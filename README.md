@@ -31,3 +31,7 @@ The following code should generate a 2D zebra texture.
 ```bash
 python main.py --test-2d --resolutions 0.5 1 --num-iters 800 --no-show
 ```
+
+The following code should use deterministic sampling to generate a 2D zebra texture in around two minutes.
+```bash
+python main.py --num_iters 5 --resolutions 0.25 0.5 1 --no-show --test-2d --deterministic --shuffle-indices```

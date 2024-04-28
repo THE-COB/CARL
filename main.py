@@ -11,6 +11,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import os 
 
+from einops import rearrange
 from tqdm import tqdm
 from search import Search
 from optimize import Optimize
@@ -89,6 +90,26 @@ def sample_neighborhood(full_grid_tensor_padded: torch.Tensor, index: torch.Tens
 	
 	return neighborhood
 
+def generate_indices(x, batch_size, shuffle=False):
+	D, H, W = x.shape
+	
+	# Create indices for each dimension
+	d_indices = torch.arange(D)
+	h_indices = torch.arange(H)
+	w_indices = torch.arange(W)
+
+	# Create meshgrid
+	d_mesh, h_mesh, w_mesh = torch.meshgrid(d_indices, h_indices, w_indices)
+
+	# Flatten indices and concatenate
+	indices = torch.stack((d_mesh.flatten(), h_mesh.flatten(), w_mesh.flatten()), dim=1)
+	assert indices.shape == (D*H*W, 3) 
+	
+	# if shuffle: 
+	shuffled_idx = torch.randperm(D*H*W)
+	indices = indices[shuffled_idx]
+
+	return rearrange(indices, '(n b) c -> n b c',b=batch_size)
 
 def custom_interpolate(x, scale_factor, mode=None): 
 	# TODO fix the mode of interpolation to bilinear and bicubic
@@ -134,12 +155,14 @@ def main(texture_file: str = 'zebra.png',
 		 neighborhood_dim: int = 8,
 		 r: float = 0.8,
 		 resolutions: list[float] = [1],
+		 deterministic: bool = False, 
+		 shuffle_indices: bool = True, 
 		 display_freq: int = 4,
 		 use_hist: bool = True,
 		 experiment_name: str = None,
 		 device: str = 'cpu',
 		 ):
-	assert num_iters >= 4, "Iterate more. 4 is too few"
+	
 	
 	if experiment_name is None:
 		now = datetime.now()
@@ -193,8 +216,17 @@ def main(texture_file: str = 'zebra.png',
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
 		downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 
-		for i in tqdm(range(int(num_iters * scale))):
-			index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
+		batch_size = min(downsampled_mask.shape[1], downsampled_mask.shape[2])
+
+		if deterministic:
+			print("Generating deterministic indices")
+			indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
+
+		for i in tqdm(range(num_iters * indices.shape[0])):
+			if not deterministic:
+				index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
+			else: 
+				index = indices[i % indices.shape[0]]
 			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood)
 			
