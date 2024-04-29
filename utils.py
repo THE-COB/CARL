@@ -72,7 +72,7 @@ def tensor_show(tensor, show,filename=None):
 		plt.imshow(tensor[slice].cpu().numpy())
 		plt.show()
 	if filename:
-		plt.imsave(f"gif/{filename}", tensor[slice].cpu().numpy())
+		plt.imsave(filename, tensor[slice].cpu().numpy())
 
 def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
 	"""

@@ -262,7 +262,7 @@ def main(texture_file: str = 'zebra.png',
 					downsampled_full_grid, 
 					scale_factor=int(resolutions[-1]/resolutions[r]),
 					mode='bicubic')
-				tensor_show(interpolated, show=False, filename=f"/{texture_file.split('.')[0]}/res{r}_step{'{:05d}'.format(i)}.png")	
+				tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
 		
 				difference= torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
 				print(difference) 
