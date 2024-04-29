@@ -235,7 +235,6 @@ def main(texture_file: str = 'zebra.png',
 
 		optimize = Optimize(downsampled_texture, r=r, use_hist=use_hist, device=device)
 		search = Search(downsampled_texture, neighborhood_dim=neighborhood_dim, index=r, experiment_name=experiment_name)
-		downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 
 		if deterministic:
 			print("Generating deterministic indices")
@@ -246,17 +245,20 @@ def main(texture_file: str = 'zebra.png',
 				index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			else: 
 				index = indices[i % indices.shape[0]]
+			downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood)
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
 			try:
+				if i % indices.shape[0]  == 10:
+					print(f"difference: {torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])}")
 				downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
 			except: 
 				print(index)
 
 			
-			if num_iters//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
+			if (num_iters * indices.shape[0])//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
 				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
 				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
 				plt.savefig(f'outputs/{experiment_name}/cross_sections/{run_details}_{r}_{i}.png')
@@ -276,9 +278,6 @@ def main(texture_file: str = 'zebra.png',
 
 	tensor_show(downsampled_full_grid, show=True)
 	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_final.pt")
-	if use_hist:
-		plt.imsave(f'outputs/{experiment_name}/histograms/{run_details}.png', 
-			downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
 	if not test_2d:
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
