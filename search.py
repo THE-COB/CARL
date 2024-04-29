@@ -49,6 +49,8 @@ class Search:
 		self.ann.search(query)
 		examples = torch.vstack(list(self.pca_to_samples.keys()))
 		tensor_keys = torch.empty(voxel_embeddings.shape[0], 5)
+		#tensor_values = torch.emtpy(voxel_embeddings.shape[0], 192)
+		#real_values = torch.emtpy(voxel_embeddings.shape[0], 192)
 
 		matches = []
 		losses = 0
@@ -63,9 +65,11 @@ class Search:
 			tensor_keys[idx, : ] = tensor_idx 
 			losses += loss 
 			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]]
+			#real_value = self.pca_to_samples[voxel_embeddings[idx]]
 			matches.append(match)
 			idx += 1
 		avg_loss = losses / batch_size
+		#import pdb; pdb.set_trace()
 		loss_1 = mse_loss(tensor_keys, voxel_embeddings)
 		# import pdb; pdb.set_trace()
 		losses_lst.append(loss_1.item())

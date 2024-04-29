@@ -254,7 +254,7 @@ def main(texture_file: str = 'zebra.png',
    
 		
 		time_stamps = [x for x in range(time)]
-		# print(f"\n\nMSE Losses??? {losses_over_time}\n\n")
+		print(f"\n\nMSE Losses??? {losses_over_time}\n\n")
 		# plt.xscale("log")
 		plt.title("MSE Key Loss / Iteration")
 		plt.yscale("log")
