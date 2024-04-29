@@ -198,7 +198,7 @@ def main(texture_file: str = 'zebra.png',
 		full_grid_tensor = sample_texture(
 			texture, 
 			(1, neighborhood_dim**2 + neighborhood_dim, neighborhood_dim**2 + neighborhood_dim, 3),
-      	)
+	  	)
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
@@ -313,55 +313,58 @@ def main(texture_file: str = 'zebra.png',
 
 	# display mesh
 	if not test_2d and show_3d:
-		# plt.imshow( init )
-		# plt.show()
 	
 		server = viser.ViserServer()
-		
-		# server.add_mesh_simple(
-		# 	name="/mesh", 
-		# 	vertices=vertices,
-		# 	faces=faces,
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	position=(0.0, 0.0, 0.0),
-		# )
-
-		# display voxels in viser and sample colors from texture
-		# server.add_point_cloud(
-		# 	name="/full_grid",
-		# 	points=full_grid_tensor[:, :, :, 0].nonzero().cpu().numpy() * pitch,
-		# 	position=(0.0, 0.0, 0.0),
-		# 	colors=(255, 0 , 0),
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.01,
-		# )
-
-		server.add_point_cloud(
-			name="/texture_voxels",
-			points=full_grid.points,
-			position=(0.0, 0.0, 0.0),
-			colors=colors,
-			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=pitch/2,
+		full_grid_min_x, full_grid_min_y, full_grid_min_z = full_grid.bounds[0]
+		full_grid_max_x, full_grid_max_y, full_grid_max_z = full_grid.bounds[1]
+		full_grid_min_x, full_grid_min_y, full_grid_min_z = float(full_grid_min_x), float(full_grid_min_y), float(full_grid_min_z)
+		full_grid_max_x, full_grid_max_y, full_grid_max_z = float(full_grid_max_x), float(full_grid_max_y), float(full_grid_max_z)
+  
+		x_slice = server.add_gui_slider(
+			"x_slice",
+			min=full_grid_min_x,
+			max=full_grid_max_x,
+			step=pitch,
+			initial_value=full_grid_max_x,
+			disabled=False,
 		)
 
-		# server.add_point_cloud(
-		# 	name="/sample_voxels2",
-		# 	points=sample_voxels2.points,
-		# 	position=(-2.0,-0.5,-1.0),
-		# 	colors=sample_colors2,
-		# 	# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.01,
-		# )
+		y_slice = server.add_gui_slider(
+			"y_slice",
+			min=full_grid_min_y,
+			max=full_grid_max_y,
+			step=pitch,
+			initial_value=full_grid_max_y,
+			disabled=False,
+		)
+  
+		z_slice = server.add_gui_slider(
+			"z_slice",
+			min=full_grid_min_z,
+			max=full_grid_max_z,
+			step=pitch,
+			initial_value=full_grid_max_z,
+			disabled=False,
+		)
+  
+		def show_pointcloud() -> None:
+			curr_x_max = float(x_slice.value)
+			curr_y_max = float(y_slice.value)
+			curr_z_max = float(z_slice.value)
 
-		# server.add_point_cloud(
-		# 	name="/mesh_pointcloud",
-		# 	points=mesh_pointcloud[::100].numpy(),
-		# 	position=(0.0, 0.0, 0.0),
-		# 	colors=(255, 0, 0),
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.5,
-		# )
+			visibility_mask = np.logical_and(full_grid.points[:, 0] < curr_x_max, np.logical_and(full_grid.points[:, 1] < curr_y_max, full_grid.points[:, 2] < curr_z_max))
+			server.add_point_cloud(
+				name="/texture_voxels",
+				points=full_grid.points[visibility_mask],
+				position=(0.0, 0.0, 0.0),
+				colors=colors[visibility_mask],
+				wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
+				point_size=pitch/2,
+			)
+
+		x_slice.on_update(lambda _: show_pointcloud())
+		y_slice.on_update(lambda _: show_pointcloud())
+		z_slice.on_update(lambda _: show_pointcloud())
 
 		while True:
 			time.sleep(10.0)
