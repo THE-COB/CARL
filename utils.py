@@ -66,11 +66,13 @@ def grid_show(texels, voxels, show):
 				ax.imshow(im[0])
 		plt.show()
 
-def tensor_show(tensor, show):
+def tensor_show(tensor, show,filename=None):
+	slice = torch.randint(tensor.shape[0], (1,))[0]
 	if show:
-		slice = torch.randint(tensor.shape[0], (1,))[0]
 		plt.imshow(tensor[slice].cpu().numpy())
 		plt.show()
+	if filename:
+		plt.imsave(filename, tensor[slice].cpu().numpy())
 
 def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
 	"""

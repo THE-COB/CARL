@@ -174,7 +174,7 @@ def main(texture_file: str = 'zebra.png',
 		experiment_name = now.strftime("%m-%d-%Y_%H-%M-%S")
 	# Load and sample texture
 	texture = torchvision.io.read_image(texture_dir + '/' + texture_file).permute(1, 2, 0).float() / 255.0
-	
+
 	if not test_2d:
 		# load mesh
 		mesh = trimesh.load(object_dir + '/' + object_file)
@@ -197,13 +197,15 @@ def main(texture_file: str = 'zebra.png',
 	else:
 		full_grid_tensor = sample_texture(
 			texture, 
-			(1, neighborhood_dim**2 + neighborhood_dim, neighborhood_dim**2 + neighborhood_dim, 3),
-	  	)
+			(1, neighborhood_dim**2, neighborhood_dim**2, 3),
+      	)
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
 	downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=resolutions[0]).bool().squeeze(-1)
- 
+	
+	os.makedirs(f"gif/", exist_ok=True)
+	os.makedirs(f"gif/{experiment_name}", exist_ok=True)
 	os.makedirs(f'outputs/{experiment_name}/', exist_ok=True)
 	os.makedirs(f'outputs/{experiment_name}/cross_sections', exist_ok=True)
 	os.makedirs(f'outputs/{experiment_name}/voxel_grids', exist_ok=True)
@@ -240,7 +242,9 @@ def main(texture_file: str = 'zebra.png',
 			print("Generating deterministic indices")
 			indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
 
-		for i in tqdm(range(num_iters * indices.shape[0])):
+		batches = num_iters * indices.shape[0]
+		for i in tqdm(range(batches)):
+			downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 			if not deterministic:
 				index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			else: 
@@ -250,21 +254,32 @@ def main(texture_file: str = 'zebra.png',
 			texel_match = search.find(neighborhood)
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
-			try:
-				if i % indices.shape[0]  == 10:
-					print(f"difference: {torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])}")
-				downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
-			except: 
-				print(index)
-
 			
+
 			if (num_iters * indices.shape[0])//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
+				# For making the GIF
+				interpolated = custom_interpolate(
+					downsampled_full_grid, 
+					scale_factor=int(resolutions[-1]/resolutions[r]),
+					mode='bicubic')
+				tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
+		
+				difference= torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
+				print(difference) 
+				if difference < 1e-8:
+					print("Skip to next resolution")
+					continue
+			
 				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
 				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
 				plt.savefig(f'outputs/{experiment_name}/cross_sections/{run_details}_{r}_{i}.png')
-			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
-			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
-		
+
+				grid_show(texels=texel_match, voxels=neighborhood, show=show)
+				tensor_show(downsampled_full_grid, show=show )	
+
+			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
+			
+							
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
 			downsampled_full_grid = custom_interpolate(
