@@ -230,13 +230,17 @@ def main(texture_file: str = 'zebra.png',
 			print("Generating deterministic indices")
 			indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
 
+		losses_over_time = []
+		time = 0
+
 		for i in tqdm(range(num_iters * indices.shape[0])):
 			if not deterministic:
 				index = sample_voxel(downsampled_mask, batch_size=batch_size, neighborhood_dim=neighborhood_dim)
 			else: 
 				index = indices[i % indices.shape[0]]
 			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
-			texel_match = search.find(neighborhood)
+			texel_match = search.find(neighborhood, losses_over_time)
+			#print("\n\n\n\n\n\nPLS HELP\n\n\n\n\n\n\n")
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
 			try:
@@ -245,7 +249,17 @@ def main(texture_file: str = 'zebra.png',
 				print(index)
 
 			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
-			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
+			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)
+			time += 1
+   
+		
+		time_stamps = [x for x in range(time)]
+		#plt.xscale("log")
+		plt.title("Average Loss / Iteration")
+		plt.yscale("log")
+		plt.plot(time_stamps, losses_over_time)
+		plt.show()
+  		#plt.plot(losses_over_time)
 		
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")

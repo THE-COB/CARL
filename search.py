@@ -41,7 +41,7 @@ class Search:
 		docs.embeddings = self.texel_embeddings
 		self.ann.index(docs)
 
-	def approximate_nearest_neighbors(self, voxel_embeddings):
+	def approximate_nearest_neighbors(self, voxel_embeddings, losses_lst):
 		voxel_embeddings = voxel_embeddings
 		query = DocumentArray.empty(voxel_embeddings.shape[0])
 		query.embeddings = voxel_embeddings
@@ -49,18 +49,25 @@ class Search:
 		examples = torch.vstack(list(self.pca_to_samples.keys()))
 
 		matches = []
+		losses = 0
+		batch_size = voxel_embeddings.shape[0]
+		#import pdb; pdb.set_trace()
 		for q in query:
 			embedding = q.matches[0].embedding
+			loss = 1 - q.matches[0].scores['cosine'].value
+			losses += loss 
 			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]]
 			matches.append(match)
+		avg_loss = losses / batch_size
+		losses_lst.append(avg_loss)
 		return torch.vstack(matches)
 
 		
-	def find(self, voxel_patches):
+	def find(self, voxel_patches, losses_pop):
 		n, p, h, w, c = voxel_patches.shape
 		voxel_patches = einops.rearrange(voxel_patches, 'n p h w c -> (n p) (h w c)').float() # N*3 x 192
 		voxel_embeddings = torch.matmul(voxel_patches, self.V_T)
-		matches = self.approximate_nearest_neighbors(voxel_embeddings)
+		matches = self.approximate_nearest_neighbors(voxel_embeddings, losses_pop)
 		
 		matches = einops.rearrange(matches, '(n p) (h w c) -> n p h w c', n=n, p=p, h=h, w=w, c=c)
 		return matches
