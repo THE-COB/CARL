@@ -254,8 +254,9 @@ def main(texture_file: str = 'zebra.png',
    
 		
 		time_stamps = [x for x in range(time)]
-		#plt.xscale("log")
-		plt.title("Average Loss / Iteration")
+		# print(f"\n\nMSE Losses??? {losses_over_time}\n\n")
+		# plt.xscale("log")
+		plt.title("MSE Key Loss / Iteration")
 		plt.yscale("log")
 		plt.plot(time_stamps, losses_over_time)
 		plt.show()

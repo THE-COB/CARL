@@ -2,6 +2,7 @@ import torch
 import torchvision
 from annlite import AnnLite
 from docarray import DocumentArray
+from torch.nn.functional import mse_loss
 #import pynndescent
 import einops 
 import matplotlib.pyplot as plt
@@ -47,19 +48,30 @@ class Search:
 		query.embeddings = voxel_embeddings
 		self.ann.search(query)
 		examples = torch.vstack(list(self.pca_to_samples.keys()))
+		tensor_keys = torch.empty(voxel_embeddings.shape[0], 5)
 
 		matches = []
 		losses = 0
 		batch_size = voxel_embeddings.shape[0]
-		#import pdb; pdb.set_trace()
+		idx = 0
 		for q in query:
 			embedding = q.matches[0].embedding
 			loss = 1 - q.matches[0].scores['cosine'].value
+			#values = self.pca_to_samples[voxel_embeddings]
+			#print(f"\n\nVALUES SHAPE: {values.shape}\n\n")
+			tensor_idx = list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]
+			tensor_keys[idx, : ] = tensor_idx 
 			losses += loss 
 			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]]
 			matches.append(match)
+			idx += 1
 		avg_loss = losses / batch_size
-		losses_lst.append(avg_loss)
+		loss_1 = mse_loss(tensor_keys, voxel_embeddings)
+		# import pdb; pdb.set_trace()
+		losses_lst.append(loss_1.item())
+		#matches_np_arr = torch.tensor(matches)
+		#self.texel_embeddings
+		#losses_lst.append(avg_loss)
 		return torch.vstack(matches)
 
 		
