@@ -111,7 +111,7 @@ def generate_indices(x, batch_size, shuffle=False):
 
 	true_indices = indices[x[indices.T[0], indices.T[1], indices.T[2]]]
 	# make sure it's divisible by batch size 
-	missing_indices = batch_size - (indices.shape[0] % batch_size)
+	missing_indices = batch_size - (true_indices.shape[0] % batch_size)
 	true_indices = torch.vstack([true_indices, true_indices[:missing_indices]])
 	batched_indices=rearrange(true_indices, '(n b) c -> n b c',b=batch_size)
 	return batched_indices
@@ -148,7 +148,7 @@ def custom_pad(tensor, neighborhood_dim):
 	return tensor_padded
 
 def main(texture_file: str = 'zebra.png', 
-		 object_file: str = 'cow.obj',
+		 object_file: str = 'cube.obj',
 		 texture_dir: str = 'textures', 
 		 object_dir: str = "objs", 
 		 pitch: float = 0.1,
@@ -203,7 +203,14 @@ def main(texture_file: str = 'zebra.png',
 	
 	downsampled_full_grid = custom_interpolate(full_grid_tensor, scale_factor=resolutions[0])
 	downsampled_mask = custom_interpolate(mask.float().unsqueeze(-1), scale_factor=resolutions[0]).bool().squeeze(-1)
-
+ 
+	os.makedirs(f'outputs/{experiment_name}/', exist_ok=True)
+	os.makedirs(f'outputs/{experiment_name}/cross_sections', exist_ok=True)
+	os.makedirs(f'outputs/{experiment_name}/voxel_grids', exist_ok=True)
+	os.makedirs(f'outputs/{experiment_name}/final_outputs', exist_ok=True)
+	os.makedirs(f'outputs/{experiment_name}/histograms', exist_ok=True)
+ 
+	run_details = f"{texture_file.split('.')[0]}_{object_file.split('.')[0]}"
 	for r in range(len(resolutions)):
 		scale = resolutions[r]
 		print(f"Commencing optimization at resolution {scale}")
@@ -248,6 +255,11 @@ def main(texture_file: str = 'zebra.png',
 			except: 
 				print(index)
 
+			
+			if num_iters//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
+				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
+				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
+				plt.savefig(f'outputs/{experiment_name}/cross_sections/{run_details}_{r}_{i}.png')
 			grid_show(texels=texel_match, voxels=neighborhood, show=show and i%(num_iters//display_freq) == 0)
 			tensor_show(downsampled_full_grid, show=show and i%(num_iters//display_freq) == 0)	
 		
@@ -263,13 +275,11 @@ def main(texture_file: str = 'zebra.png',
 				mode='bicubic').bool().squeeze(-1)
 
 	tensor_show(downsampled_full_grid, show=True)
-	os.makedirs(f"outputs/{experiment_name}", exist_ok=True)
-	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/{texture_file.split('.')[0]}_{object_file.split('.')[0]}_voxel_grid.pt")
-	if test_2d:
-		hist = "_" if use_hist else "_no"
-		plt.imsave(f'outputs/{experiment_name}/{texture_file.split(".")[0]}{hist}_hist_resolutions_{"_".join(map(str,  resolutions))}_{num_iters}_iters.png', 
-             downsampled_full_grid[0].cpu().numpy())
-	else: 
+	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_final.pt")
+	if use_hist:
+		plt.imsave(f'outputs/{experiment_name}/histograms/{run_details}.png', 
+			downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
+	if not test_2d:
 		colors = pointify_tensor(full_grid_tensor, mask=mask)
 	
 	search.remove_cache()
@@ -279,7 +289,7 @@ def main(texture_file: str = 'zebra.png',
 		ax = plt.figure().add_subplot(projection='3d')
 		ax.voxels(full_grid.matrix,
 				facecolors=full_grid_tensor.cpu().numpy(),
-				linewidth=0.5)
+				linewidth=pitch)
 		ax.set_aspect('equal')
 		# Hide grid lines
 		ax.grid(False)
@@ -297,7 +307,7 @@ def main(texture_file: str = 'zebra.png',
 		for theta in range(0, 360, angle_step_size):
 			for phi in range(0, 180, angle_step_size):
 				ax.view_init(elev=phi, azim=theta)
-				plt.savefig(f"outputs/{experiment_name}/{texture_file.split('.')[0]}_{object_file.split('.')[0]}_voxel_grid_{theta}_{phi}.png")
+				plt.savefig(f"outputs/{experiment_name}/final_outputs/{theta}_{phi}.png")
 
 		if show:
 			plt.show()
@@ -333,7 +343,7 @@ def main(texture_file: str = 'zebra.png',
 			position=(0.0, 0.0, 0.0),
 			colors=colors,
 			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=0.05,
+			point_size=pitch/2,
 		)
 
 		# server.add_point_cloud(
