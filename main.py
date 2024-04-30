@@ -2,9 +2,7 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import tyro
-import viser
 import trimesh
-import viser.transforms as tf
 import numpy as np
 import time
 from datetime import datetime
@@ -16,6 +14,7 @@ from tqdm import tqdm
 from search import Search
 from optimize import Optimize
 from utils import sample_texture, grid_show, tensor_show, pointify_tensor
+from visualize import visualize_tensor
 
 def randomize_voxels(full_grid, texture, padding=0, device="cpu"):
 	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float().to(device)
@@ -262,18 +261,11 @@ def main(texture_file: str = 'zebra.png',
 			
 
 			if (num_iters * indices.shape[0])//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
-				# For making the GIF
-				interpolated = custom_interpolate(
-					downsampled_full_grid, 
-					scale_factor=int(resolutions[-1]/resolutions[r]),
-					mode='bicubic')
-				tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
-		
-				difference= torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
+				difference= F.mse_loss(new_value.cpu(), downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
 				print(difference) 
-				if difference < 1e-8:
+				if difference < 1e-6:
 					print("Skip to next resolution")
-					continue
+					break
 			
 				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
 				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
@@ -307,6 +299,16 @@ def main(texture_file: str = 'zebra.png',
 		res_rate = scale
 		plt.savefig(f"/Users/anthonysalinassuarez/Documents/cs184/dummy-website/texture_renderings/images/{fname}-scale-{res_rate}-num_iters-{num_iters}.png", format = "png")
 		plt.show()
+  
+  
+		if i % int(scale * 50) == 0:
+			# For making the GIF
+			interpolated = custom_interpolate(
+				downsampled_full_grid, 
+				scale_factor=int(resolutions[-1]/resolutions[r]),
+				mode='bicubic')
+			tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
+
 							
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
@@ -322,7 +324,7 @@ def main(texture_file: str = 'zebra.png',
 	tensor_show(downsampled_full_grid, show=True)
 	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_final.pt")
 	if not test_2d:
-		colors = pointify_tensor(full_grid_tensor, mask=mask)
+		colors = pointify_tensor(downsampled_full_grid, mask=downsampled_mask)
 	
 	search.remove_cache()
  
@@ -330,7 +332,7 @@ def main(texture_file: str = 'zebra.png',
 	if not test_2d:
 		ax = plt.figure().add_subplot(projection='3d')
 		ax.voxels(full_grid.matrix,
-				facecolors=full_grid_tensor.cpu().numpy(),
+				facecolors=downsampled_full_grid.cpu().numpy(),
 				linewidth=pitch)
 		ax.set_aspect('equal')
 		# Hide grid lines
@@ -356,58 +358,7 @@ def main(texture_file: str = 'zebra.png',
 
 	# display mesh
 	if not test_2d and show_3d:
-		# plt.imshow( init )
-		# plt.show()
-	
-		server = viser.ViserServer()
-		
-		# server.add_mesh_simple(
-		# 	name="/mesh", 
-		# 	vertices=vertices,
-		# 	faces=faces,
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	position=(0.0, 0.0, 0.0),
-		# )
-
-		# display voxels in viser and sample colors from texture
-		# server.add_point_cloud(
-		# 	name="/full_grid",
-		# 	points=full_grid_tensor[:, :, :, 0].nonzero().cpu().numpy() * pitch,
-		# 	position=(0.0, 0.0, 0.0),
-		# 	colors=(255, 0 , 0),
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.01,
-		# )
-
-		server.add_point_cloud(
-			name="/texture_voxels",
-			points=full_grid.points,
-			position=(0.0, 0.0, 0.0),
-			colors=colors,
-			wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-			point_size=pitch/2,
-		)
-
-		# server.add_point_cloud(
-		# 	name="/sample_voxels2",
-		# 	points=sample_voxels2.points,
-		# 	position=(-2.0,-0.5,-1.0),
-		# 	colors=sample_colors2,
-		# 	# wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.01,
-		# )
-
-		# server.add_point_cloud(
-		# 	name="/mesh_pointcloud",
-		# 	points=mesh_pointcloud[::100].numpy(),
-		# 	position=(0.0, 0.0, 0.0),
-		# 	colors=(255, 0, 0),
-		# 	wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-		# 	point_size=0.5,
-		# )
-
-		while True:
-			time.sleep(10.0)
+		visualize_tensor(full_grid, colors, pitch)
 	
 
 if __name__ == '__main__':
