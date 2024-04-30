@@ -1,4 +1,5 @@
 import torch
+from torch.nn.functional import mse_loss
 import torchvision
 from annlite import AnnLite
 from docarray import DocumentArray
@@ -41,26 +42,39 @@ class Search:
 		docs.embeddings = self.texel_embeddings
 		self.ann.index(docs)
 
-	def approximate_nearest_neighbors(self, voxel_embeddings):
+	def approximate_nearest_neighbors(self, voxel_embeddings, losses_lst, cos_losses):
 		voxel_embeddings = voxel_embeddings
 		query = DocumentArray.empty(voxel_embeddings.shape[0])
 		query.embeddings = voxel_embeddings
 		self.ann.search(query)
 		examples = torch.vstack(list(self.pca_to_samples.keys()))
+		tensor_keys = torch.empty(voxel_embeddings.shape[0], 5)
 
 		matches = []
+		index = 0
+		cos_loss = 0
+		batch_size = voxel_embeddings.shape[0]
 		for q in query:
 			embedding = q.matches[0].embedding
+			cos_loss += 1 - q.matches[0].scores['cosine'].value
+			tensor_idx = list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]
+			tensor_keys[index, : ] = tensor_idx
 			match = self.pca_to_samples[list(self.pca_to_samples.keys())[(embedding == examples).all(axis=1).nonzero()[0]]]
 			matches.append(match)
+			index += 1
+   
+		avg_cos_loss = cos_loss / batch_size
+		loss_1 = mse_loss(tensor_keys, voxel_embeddings)
+		losses_lst.append(loss_1.item())
+		cos_losses.append(avg_cos_loss)
 		return torch.vstack(matches)
 
 		
-	def find(self, voxel_patches):
+	def find(self, voxel_patches, losses_lst, cos_losses):
 		n, p, h, w, c = voxel_patches.shape
 		voxel_patches = einops.rearrange(voxel_patches, 'n p h w c -> (n p) (h w c)').float() # N*3 x 192
 		voxel_embeddings = torch.matmul(voxel_patches, self.V_T)
-		matches = self.approximate_nearest_neighbors(voxel_embeddings)
+		matches = self.approximate_nearest_neighbors(voxel_embeddings, losses_lst, cos_losses)
 		
 		matches = einops.rearrange(matches, '(n p) (h w c) -> n p h w c', n=n, p=p, h=h, w=w, c=c)
 		return matches

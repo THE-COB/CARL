@@ -241,6 +241,11 @@ def main(texture_file: str = 'zebra.png',
 		if deterministic:
 			print("Generating deterministic indices")
 			indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
+   
+		losses_over_time = []
+		cosine_losses = []
+		time = 0
+		#import pdb; pdb.set_trace()
 
 		batches = num_iters * indices.shape[0]
 		for i in tqdm(range(batches)):
@@ -251,7 +256,7 @@ def main(texture_file: str = 'zebra.png',
 				index = indices[i % indices.shape[0]]
 			downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
-			texel_match = search.find(neighborhood)
+			texel_match = search.find(neighborhood, losses_over_time, cosine_losses)
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
 			
@@ -278,7 +283,30 @@ def main(texture_file: str = 'zebra.png',
 				tensor_show(downsampled_full_grid, show=show )	
 
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
+			time += 1
 			
+		time_stamps = [x for x in range(time)]
+		print(f"\n\nCosine Losses / Iteration {cosine_losses}\n\n")
+		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+		ax1.plot(time_stamps, losses_over_time)
+		ax1.set_xlabel("Iterations")
+		ax1.set_ylabel("MSE Loss")
+		ax1.set_title(f"MSE Key Loss / Iterations for: {texture_file}")
+		tex_shape = texture.shape
+		down_tex_shape = downsampled_texture.shape
+		ax2.text(0.5, 0.5, f"Original Resolution: {tex_shape[0]} * {tex_shape[1]}", fontsize=12, va='center', ha='center', transform=ax2.transAxes)
+		ax2.text(0.5, 0.25, f"Downsampled Resolution (featured in plot): {down_tex_shape[0]} * {down_tex_shape[1]}", fontsize=12, va='center', ha='center', transform=ax2.transAxes)
+		ax2.text(0.5, 0.75, f"Number of Iterations CLI: {num_iters}", fontsize=12, va='center', ha='center', transform=ax2.transAxes)
+		ax2.axis('off')
+		# plt.title(f"MSE Key Loss / Iteration for {texture_file}")
+		# plt.text(2, 5, 'Important note here', fontsize=12, color='red')
+		# #plt.yscale("log")
+		# plt.plot(time_stamps, losses_over_time)
+		plt.tight_layout()
+		fname =  texture_file.split(".png")[0]
+		res_rate = scale
+		plt.savefig(f"/Users/anthonysalinassuarez/Documents/cs184/dummy-website/texture_renderings/images/{fname}-scale-{res_rate}-num_iters-{num_iters}.png", format = "png")
+		plt.show()
 							
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
