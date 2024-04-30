@@ -257,18 +257,11 @@ def main(texture_file: str = 'zebra.png',
 			
 
 			if (num_iters * indices.shape[0])//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
-				# For making the GIF
-				interpolated = custom_interpolate(
-					downsampled_full_grid, 
-					scale_factor=int(resolutions[-1]/resolutions[r]),
-					mode='bicubic')
-				tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
-		
-				difference= torch.norm(new_value.cpu() - downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
+				difference= F.mse_loss(new_value.cpu(), downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
 				print(difference) 
-				if difference < 1e-8:
+				if difference < 1e-6:
 					print("Skip to next resolution")
-					continue
+					break
 			
 				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
 				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
@@ -278,7 +271,14 @@ def main(texture_file: str = 'zebra.png',
 				tensor_show(downsampled_full_grid, show=show )	
 
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
-			
+			if i % int(scale * 50) == 0:
+				# For making the GIF
+				interpolated = custom_interpolate(
+					downsampled_full_grid, 
+					scale_factor=int(resolutions[-1]/resolutions[r]),
+					mode='bicubic')
+				tensor_show(interpolated, show=False, filename=f"gif/{experiment_name}/res{r}_step{'{:05d}'.format(i)}.png")	
+
 							
 		if r + 1 < len(resolutions):
 			print(f"Upsampling optimized tensor to resolution {resolutions[r+1]}")
