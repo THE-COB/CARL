@@ -2,9 +2,7 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import tyro
-import viser
 import trimesh
-import viser.transforms as tf
 import numpy as np
 import time
 from datetime import datetime
@@ -16,6 +14,7 @@ from tqdm import tqdm
 from search import Search
 from optimize import Optimize
 from utils import sample_texture, grid_show, tensor_show, pointify_tensor
+from visualize import visualize_tensor
 
 def randomize_voxels(full_grid, texture, padding=0, device="cpu"):
 	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float().to(device)
@@ -294,7 +293,7 @@ def main(texture_file: str = 'zebra.png',
 	tensor_show(downsampled_full_grid, show=True)
 	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_final.pt")
 	if not test_2d:
-		colors = pointify_tensor(full_grid_tensor, mask=mask)
+		colors = pointify_tensor(downsampled_full_grid, mask=downsampled_mask)
 	
 	search.remove_cache()
  
@@ -302,7 +301,7 @@ def main(texture_file: str = 'zebra.png',
 	if not test_2d:
 		ax = plt.figure().add_subplot(projection='3d')
 		ax.voxels(full_grid.matrix,
-				facecolors=full_grid_tensor.cpu().numpy(),
+				facecolors=downsampled_full_grid.cpu().numpy(),
 				linewidth=pitch)
 		ax.set_aspect('equal')
 		# Hide grid lines
@@ -328,61 +327,7 @@ def main(texture_file: str = 'zebra.png',
 
 	# display mesh
 	if not test_2d and show_3d:
-	
-		server = viser.ViserServer()
-		full_grid_min_x, full_grid_min_y, full_grid_min_z = full_grid.bounds[0]
-		full_grid_max_x, full_grid_max_y, full_grid_max_z = full_grid.bounds[1]
-		full_grid_min_x, full_grid_min_y, full_grid_min_z = float(full_grid_min_x), float(full_grid_min_y), float(full_grid_min_z)
-		full_grid_max_x, full_grid_max_y, full_grid_max_z = float(full_grid_max_x), float(full_grid_max_y), float(full_grid_max_z)
-  
-		x_slice = server.add_gui_slider(
-			"x_slice",
-			min=full_grid_min_x,
-			max=full_grid_max_x,
-			step=pitch,
-			initial_value=full_grid_max_x,
-			disabled=False,
-		)
-
-		y_slice = server.add_gui_slider(
-			"y_slice",
-			min=full_grid_min_y,
-			max=full_grid_max_y,
-			step=pitch,
-			initial_value=full_grid_max_y,
-			disabled=False,
-		)
-  
-		z_slice = server.add_gui_slider(
-			"z_slice",
-			min=full_grid_min_z,
-			max=full_grid_max_z,
-			step=pitch,
-			initial_value=full_grid_max_z,
-			disabled=False,
-		)
-  
-		def show_pointcloud() -> None:
-			curr_x_max = float(x_slice.value)
-			curr_y_max = float(y_slice.value)
-			curr_z_max = float(z_slice.value)
-
-			visibility_mask = np.logical_and(full_grid.points[:, 0] < curr_x_max, np.logical_and(full_grid.points[:, 1] < curr_y_max, full_grid.points[:, 2] < curr_z_max))
-			server.add_point_cloud(
-				name="/texture_voxels",
-				points=full_grid.points[visibility_mask],
-				position=(0.0, 0.0, 0.0),
-				colors=colors[visibility_mask],
-				wxyz=tf.SO3.from_x_radians(np.pi / 2).wxyz,
-				point_size=pitch/2,
-			)
-
-		x_slice.on_update(lambda _: show_pointcloud())
-		y_slice.on_update(lambda _: show_pointcloud())
-		z_slice.on_update(lambda _: show_pointcloud())
-
-		while True:
-			time.sleep(10.0)
+		visualize_tensor(full_grid, colors, pitch)
 	
 
 if __name__ == '__main__':
