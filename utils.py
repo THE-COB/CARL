@@ -5,6 +5,7 @@ import trimesh
 from torchvision.transforms.functional import pil_to_tensor
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
+from einops import rearrange
 
 def sample_voxels(sample_point, radius, mesh, texture, pitch=0.01):
 	# Sample voxel mesh
@@ -83,3 +84,33 @@ def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
 	"""
 	colors = full_grid_tensor[mask].view(-1, 3)
 	return colors
+
+def generate_indices(x, batch_size, shuffle=False):
+	D, H, W = x.shape
+	
+	# Create indices for each dimension
+	d_indices = torch.arange(D)
+	h_indices = torch.arange(H)
+	w_indices = torch.arange(W)
+
+	# Create meshgrid
+	d_mesh, h_mesh, w_mesh = torch.meshgrid(d_indices, h_indices, w_indices)
+
+	# Flatten indices and concatenate
+	indices = torch.stack((d_mesh.flatten(), h_mesh.flatten(), w_mesh.flatten()), dim=1)
+	assert indices.shape == (D*H*W, 3) 
+	
+	if shuffle: 
+		shuffled_idx = torch.randperm(D*H*W)
+		indices = indices[shuffled_idx]
+
+	true_indices = indices[x[indices.T[0], indices.T[1], indices.T[2]]]
+	if batch_size == -1:
+		return true_indices
+	
+	# make sure it's divisible by batch size 
+	missing_indices = batch_size - (true_indices.shape[0] % batch_size)
+	true_indices = torch.vstack([true_indices, true_indices[:missing_indices]])
+
+	batched_indices=rearrange(true_indices, '(n b) c -> n b c',b=batch_size)
+	return batched_indices

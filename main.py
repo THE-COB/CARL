@@ -13,7 +13,7 @@ from einops import rearrange
 from tqdm import tqdm
 from search import Search
 from optimize import Optimize
-from utils import sample_texture, grid_show, tensor_show, pointify_tensor
+from utils import sample_texture, grid_show, tensor_show, pointify_tensor, generate_indices
 from visualize import visualize_tensor
 
 def randomize_voxels(full_grid, texture, padding=0, device="cpu"):
@@ -89,32 +89,6 @@ def sample_neighborhood(full_grid_tensor_padded: torch.Tensor, index: torch.Tens
 	
 	return neighborhood
 
-def generate_indices(x, batch_size, shuffle=False):
-	D, H, W = x.shape
-	
-	# Create indices for each dimension
-	d_indices = torch.arange(D)
-	h_indices = torch.arange(H)
-	w_indices = torch.arange(W)
-
-	# Create meshgrid
-	d_mesh, h_mesh, w_mesh = torch.meshgrid(d_indices, h_indices, w_indices)
-
-	# Flatten indices and concatenate
-	indices = torch.stack((d_mesh.flatten(), h_mesh.flatten(), w_mesh.flatten()), dim=1)
-	assert indices.shape == (D*H*W, 3) 
-	
-	if shuffle: 
-		shuffled_idx = torch.randperm(D*H*W)
-		indices = indices[shuffled_idx]
-
-	true_indices = indices[x[indices.T[0], indices.T[1], indices.T[2]]]
-	# make sure it's divisible by batch size 
-	missing_indices = batch_size - (true_indices.shape[0] % batch_size)
-	true_indices = torch.vstack([true_indices, true_indices[:missing_indices]])
-	batched_indices=rearrange(true_indices, '(n b) c -> n b c',b=batch_size)
-	return batched_indices
-
 def custom_interpolate(x, scale_factor, mode=None): 
 	# TODO fix the mode of interpolation to bilinear and bicubic
 	# F.interpolate expects (B C ...)
@@ -163,11 +137,12 @@ def main(texture_file: str = 'zebra.png',
 		 shuffle_indices: bool = True, 
 		 display_freq: int = 4,
 		 use_hist: bool = True,
+		 gen_views: bool = True,
 		 experiment_name: str = None,
 		 device: str = 'cpu',
 		 ):
 	
-	
+ 
 	if experiment_name is None:
 		now = datetime.now()
 		experiment_name = now.strftime("%m-%d-%Y_%H-%M-%S")
@@ -186,6 +161,7 @@ def main(texture_file: str = 'zebra.png',
 		# voxelize mesh
 		start = time.time()
 		full_grid = trimesh.voxel.creation.voxelize(mesh, pitch=pitch).fill() #number of voxels in voxel grid (depth, length, width)
+			
 		end = time.time()
 		print(f"Voxelized mesh with shape {full_grid.shape} in {end - start:.2f} seconds")
 	
@@ -196,7 +172,7 @@ def main(texture_file: str = 'zebra.png',
 	else:
 		full_grid_tensor = sample_texture(
 			texture, 
-			(1, neighborhood_dim**2, neighborhood_dim**2, 3),
+			(1, max(64, neighborhood_dim**2), max(64, neighborhood_dim**2), 3),
       	)
 		mask = torch.ones_like(full_grid_tensor[:, :, :, 0]).bool()
 	
@@ -292,15 +268,23 @@ def main(texture_file: str = 'zebra.png',
 
 	tensor_show(downsampled_full_grid, show=True)
 	torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_final.pt")
+	print(downsampled_full_grid.shape)
 	if not test_2d:
 		colors = pointify_tensor(downsampled_full_grid, mask=downsampled_mask)
 	
 	search.remove_cache()
  
+	if test_2d:
+		# display 2D texture
+		# clear matplotlib figure
+		plt.clf()
+		plt.imshow(downsampled_full_grid[0].cpu().numpy())
+		plt.savefig(f"outputs/{experiment_name}/final_outputs/{run_details}_final.png")
+ 
 	# convert colored voxel grid into a ply
-	if not test_2d:
+	if not test_2d and gen_views:
 		ax = plt.figure().add_subplot(projection='3d')
-		ax.voxels(full_grid.matrix,
+		ax.voxels(downsampled_mask.cpu().numpy(),
 				facecolors=downsampled_full_grid.cpu().numpy(),
 				linewidth=pitch)
 		ax.set_aspect('equal')
@@ -327,7 +311,7 @@ def main(texture_file: str = 'zebra.png',
 
 	# display mesh
 	if not test_2d and show_3d:
-		visualize_tensor(full_grid, colors, pitch)
+		visualize_tensor(downsampled_full_grid, downsampled_mask, pitch)
 	
 
 if __name__ == '__main__':
