@@ -67,12 +67,9 @@ class Optimize:
         exemplar_indices = (exemplar / 256 * self.num_bins).int()
         n, p, h, w, c = weight.shape
         solid_hists = self.create_hist(solid)
-        try:
-            hist_solid_values = solid_hists[[0, 1, 2]*n*h*w*p, exemplar_indices.flatten()].reshape(exemplar_indices.shape) 
-        except:
-            import pdb; pdb.set_trace()
+        hist_solid_values = solid_hists[[0, 1, 2]*n*h*w*p, exemplar_indices.flatten()].reshape(exemplar_indices.shape) 
         hist_exemplar_values = self.texture_hists[[0, 1,2]*n*h*w*p, exemplar_indices.flatten()].reshape(exemplar_indices.shape)
-        diff = hist_solid_values - hist_exemplar_values
+        diff = torch.exp(hist_solid_values - hist_exemplar_values) 
         hist_weights = weight / (1 + torch.sum(torch.where(diff > 0, diff, 0.0), dim=4, keepdim=True))
         return hist_weights
         
@@ -88,7 +85,7 @@ class Optimize:
         returns s: torch.Tensor (n, 3)
         """
 
-        s_new = 1/torch.sum(w, dim=(1,2,3)) * torch.sum(einops.rearrange(w * e, 'b p w h c -> b (p w h) c'),dim=1)
+        s_new = 1/(1e-8 + torch.sum(w, dim=(1,2,3))) * torch.sum(einops.rearrange(w * e, 'b p w h c -> b (p w h) c'),dim=1)
 
         return s_new
     

@@ -1,4 +1,5 @@
 import torch
+import einops
 import torchvision
 import numpy as np
 import trimesh
@@ -52,6 +53,17 @@ def sample_texture(texture, im_shape, device='cpu'):
 	p = p.to(device)
 	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True).to(device) #samples from uniform distribution
 	init = texture.view((-1, 3))[index].reshape(im_shape) # gets colors of sampled pixels from texture image + shapes into texture shape
+	return init
+
+def sample_texture_patches(texture, im_shape, side=4, device='cpu'):
+	im_shape = (4 - len(im_shape)) * (1,) + im_shape
+	num_samples = im_shape[1]//side * im_shape[2] //side
+	num_pixels = texture.shape[0]// side * texture.shape[1]// side
+	p = torch.ones(num_pixels)/num_pixels # Initialize a uniform distribution over samples
+	p = p.to(device)
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True).to(device) #samples from uniform distribution
+	patches = einops.rearrange(texture, "(d p1) (h p2) c -> (d h) (p1 p2) c", p1=side, p2=side)
+	init = einops.rearrange(patches[index], "(d h) (p1 p2) c -> 1 (d p1) (h p2) c", p1=side, p2=side, d=im_shape[1]//side) # gets colors of sampled pixels from texture image + shapes into texture shape
 	return init
 
 def grid_show(texels, voxels, show):

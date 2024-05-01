@@ -112,11 +112,11 @@ def custom_pad(tensor, neighborhood_dim):
 		# In 3D case, pad D, H, W. Never pad batch dimension
 		pad = (pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment)
 		tensor = tensor.permute(3,0,1,2).unsqueeze(0)
-		tensor_padded = F.pad(tensor, pad=pad, mode='circular')[0].permute(1,2,3,0)
+		tensor_padded = F.pad(tensor, pad=pad, mode='replicate')[0].permute(1,2,3,0)
 	else: 
 		# In 2D case, pad only H, W. Never pad batch dimension
 		pad = (pad_adjustment, pad_adjustment, pad_adjustment, pad_adjustment)	
-		tensor_padded = F.pad(tensor.permute(3,0,1,2), pad=pad, mode='circular').permute(1,2,3,0)
+		tensor_padded = F.pad(tensor.permute(3,0,1,2), pad=pad, mode='replicate').permute(1,2,3,0)
 
 	return tensor_padded
 
@@ -215,7 +215,7 @@ def main(texture_file: str = 'zebra.png',
 
 		if deterministic:
 			print("Generating deterministic indices")
-			indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
+		indices = generate_indices(downsampled_mask, batch_size, shuffle=shuffle_indices)
 
 		batches = num_iters * indices.shape[0]
 		for i in tqdm(range(batches)):
@@ -238,15 +238,15 @@ def main(texture_file: str = 'zebra.png',
 					print("Skip to next resolution")
 					break
 			
-				torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
-				plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
-				plt.savefig(f'outputs/{experiment_name}/cross_sections/{run_details}_{r}_{i}.png')
+				# torch.save(downsampled_full_grid, f"outputs/{experiment_name}/voxel_grids/{run_details}_{r}_{i}.pt")
+				# plt.imshow(downsampled_full_grid[downsampled_full_grid.shape[0]//2].cpu().numpy())
+				# plt.savefig(f'outputs/{experiment_name}/cross_sections/{run_details}_{r}_{i}.png')
 
 				grid_show(texels=texel_match, voxels=neighborhood, show=show)
 				tensor_show(downsampled_full_grid, show=show )	
 
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
-			if i % int(scale * 50) == 0:
+			if i % int(scale * 50 * 32/batch_size) == 0:
 				# For making the GIF
 				interpolated = custom_interpolate(
 					downsampled_full_grid, 
@@ -311,7 +311,7 @@ def main(texture_file: str = 'zebra.png',
 
 	# display mesh
 	if not test_2d and show_3d:
-		visualize_tensor(downsampled_full_grid, downsampled_mask, pitch)
+		visualize_tensor(full_grid, colors, pitch)
 	
 
 if __name__ == '__main__':
