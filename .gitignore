@@ -3,3 +3,4 @@ objs
 __pycache__
 tmp*
 outputs*
+gif*

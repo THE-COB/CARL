@@ -1,10 +1,12 @@
 import torch
+import einops
 import torchvision
 import numpy as np
 import trimesh
 from torchvision.transforms.functional import pil_to_tensor
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
+from einops import rearrange
 
 def sample_voxels(sample_point, radius, mesh, texture, pitch=0.01):
 	# Sample voxel mesh
@@ -53,6 +55,17 @@ def sample_texture(texture, im_shape, device='cpu'):
 	init = texture.view((-1, 3))[index].reshape(im_shape) # gets colors of sampled pixels from texture image + shapes into texture shape
 	return init
 
+def sample_texture_patches(texture, im_shape, side=4, device='cpu'):
+	im_shape = (4 - len(im_shape)) * (1,) + im_shape
+	num_samples = im_shape[1]//side * im_shape[2] //side
+	num_pixels = texture.shape[0]// side * texture.shape[1]// side
+	p = torch.ones(num_pixels)/num_pixels # Initialize a uniform distribution over samples
+	p = p.to(device)
+	index = torch.multinomial(input=p, num_samples=num_samples, replacement=True).to(device) #samples from uniform distribution
+	patches = einops.rearrange(texture, "(d p1) (h p2) c -> (d h) (p1 p2) c", p1=side, p2=side)
+	init = einops.rearrange(patches[index], "(d h) (p1 p2) c -> 1 (d p1) (h p2) c", p1=side, p2=side, d=im_shape[1]//side) # gets colors of sampled pixels from texture image + shapes into texture shape
+	return init
+
 def grid_show(texels, voxels, show):
 	if show:
 		fig = plt.figure(figsize=(4., 4.))
@@ -66,11 +79,13 @@ def grid_show(texels, voxels, show):
 				ax.imshow(im[0])
 		plt.show()
 
-def tensor_show(tensor, show):
+def tensor_show(tensor, show,filename=None):
+	slice = torch.randint(tensor.shape[0], (1,))[0]
 	if show:
-		slice = torch.randint(tensor.shape[0], (1,))[0]
 		plt.imshow(tensor[slice].cpu().numpy())
 		plt.show()
+	if filename:
+		plt.imsave(filename, tensor[slice].cpu().numpy())
 
 def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
 	"""
@@ -81,3 +96,33 @@ def pointify_tensor(full_grid_tensor: torch.Tensor, mask: torch.Tensor):
 	"""
 	colors = full_grid_tensor[mask].view(-1, 3)
 	return colors
+
+def generate_indices(x, batch_size, shuffle=False):
+	D, H, W = x.shape
+	
+	# Create indices for each dimension
+	d_indices = torch.arange(D)
+	h_indices = torch.arange(H)
+	w_indices = torch.arange(W)
+
+	# Create meshgrid
+	d_mesh, h_mesh, w_mesh = torch.meshgrid(d_indices, h_indices, w_indices)
+
+	# Flatten indices and concatenate
+	indices = torch.stack((d_mesh.flatten(), h_mesh.flatten(), w_mesh.flatten()), dim=1)
+	assert indices.shape == (D*H*W, 3) 
+	
+	if shuffle: 
+		shuffled_idx = torch.randperm(D*H*W)
+		indices = indices[shuffled_idx]
+
+	true_indices = indices[x[indices.T[0], indices.T[1], indices.T[2]]]
+	if batch_size == -1:
+		return true_indices
+	
+	# make sure it's divisible by batch size 
+	missing_indices = batch_size - (true_indices.shape[0] % batch_size)
+	true_indices = torch.vstack([true_indices, true_indices[:missing_indices]])
+
+	batched_indices=rearrange(true_indices, '(n b) c -> n b c',b=batch_size)
+	return batched_indices
