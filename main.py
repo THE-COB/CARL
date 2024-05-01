@@ -14,7 +14,7 @@ from tqdm import tqdm
 from search import Search
 from optimize import Optimize
 from utils import sample_texture, grid_show, tensor_show, pointify_tensor
-from visualize import visualize_tensor
+# from visualize import visualize_tensor
 
 def randomize_voxels(full_grid, texture, padding=0, device="cpu"):
 	full_grid_tensor = torch.from_numpy(full_grid.matrix).unsqueeze(-1).expand(-1,-1,-1,3).float().to(device)
@@ -247,6 +247,7 @@ def main(texture_file: str = 'zebra.png',
 		#import pdb; pdb.set_trace()
 
 		batches = num_iters * indices.shape[0]
+		fat_Lsss = []
 		for i in tqdm(range(batches)):
 			downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 			if not deterministic:
@@ -256,9 +257,13 @@ def main(texture_file: str = 'zebra.png',
 			downsampled_full_grid_padded = custom_pad(downsampled_full_grid, neighborhood_dim)
 			neighborhood = sample_neighborhood(downsampled_full_grid_padded, index, neighborhood_dim=neighborhood_dim)
 			texel_match = search.find(neighborhood, losses_over_time, cosine_losses)
+			fat_L = F.mse_loss(texel_match, neighborhood)
+			fat_Lsss.append(fat_L)
+			time += 1
+			#import pdb; pdb.set_trace()
 			
 			new_value = optimize(exemplar=texel_match.to(device), solid=neighborhood.to(device))
-			
+			#import pdb; pdb.set_trace()
 
 			if (num_iters * indices.shape[0])//display_freq > 0 and i % ((num_iters * indices.shape[0])//display_freq) == 0:
 				difference= F.mse_loss(new_value.cpu(), downsampled_full_grid[index.T[0], index.T[1], index.T[2]])
@@ -275,15 +280,15 @@ def main(texture_file: str = 'zebra.png',
 				tensor_show(downsampled_full_grid, show=show )	
 
 			downsampled_full_grid[index.T[0], index.T[1], index.T[2]] = new_value.cpu()
-			time += 1
 			
+		#print(f"\n\n{fat_Lsss}\n\n")
+		#import pdb; pdb.set_trace()
 		time_stamps = [x for x in range(time)]
-		print(f"\n\nCosine Losses / Iteration {cosine_losses}\n\n")
 		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
-		ax1.plot(time_stamps, losses_over_time)
+		ax1.plot(time_stamps, fat_Lsss)
 		ax1.set_xlabel("Iterations")
 		ax1.set_ylabel("MSE Loss")
-		ax1.set_title(f"MSE Key Loss / Iterations for: {texture_file}")
+		ax1.set_title(f"MSE Loss / Iterations for: {texture_file}")
 		tex_shape = texture.shape
 		down_tex_shape = downsampled_texture.shape
 		ax2.text(0.5, 0.5, f"Original Resolution: {tex_shape[0]} * {tex_shape[1]}", fontsize=12, va='center', ha='center', transform=ax2.transAxes)
@@ -357,8 +362,8 @@ def main(texture_file: str = 'zebra.png',
 			plt.show()
 
 	# display mesh
-	if not test_2d and show_3d:
-		visualize_tensor(full_grid, colors, pitch)
+	# if not test_2d and show_3d:
+	# 	visualize_tensor(full_grid, colors, pitch)
 	
 
 if __name__ == '__main__':
